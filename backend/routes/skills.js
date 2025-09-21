@@ -19,13 +19,14 @@ router.get('/', async (req, res) => {
 
         // Add search filter
         if (search) {
-            sql += ' AND skill_name LIKE ?';
-            params.push(`%${search}%`);
+            sql += ' AND (skill_name LIKE ? OR category LIKE ?)';
+            const searchTerm = `%${search}%`;
+            params.push(searchTerm, searchTerm);
         }
 
         // Add pagination
         const offset = (page - 1) * limit;
-        sql += ' ORDER BY skill_name ASC LIMIT ? OFFSET ?';
+        sql += ' ORDER BY skill_name LIMIT ? OFFSET ?';
         params.push(parseInt(limit), parseInt(offset));
 
         const result = await executeQuery(sql, params);
@@ -41,8 +42,9 @@ router.get('/', async (req, res) => {
             }
             
             if (search) {
-                countSql += ' AND skill_name LIKE ?';
-                countParams.push(`%${search}%`);
+                countSql += ' AND (skill_name LIKE ? OR category LIKE ?)';
+                const searchTerm = `%${search}%`;
+                countParams.push(searchTerm, searchTerm);
             }
 
             const countResult = await executeQuery(countSql, countParams);
@@ -113,7 +115,7 @@ router.get('/:id', async (req, res) => {
 // Create new skill
 router.post('/', [
     body('skill_name').notEmpty().withMessage('Skill name is required'),
-    body('category').optional().notEmpty().withMessage('Category cannot be empty')
+    body('category').notEmpty().withMessage('Category is required')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -272,16 +274,27 @@ router.delete('/:id', async (req, res) => {
             });
         }
 
-        // Check if skill is being used by students
-        const studentSkillsCheck = await executeQuery(
-            'SELECT stud_id FROM student_skills WHERE skill_id = ?',
+        // Check if skill is being used by students or jobs
+        const studentUsage = await executeQuery(
+            'SELECT COUNT(*) as count FROM student_skills WHERE skill_id = ?',
+            [id]
+        );
+        const jobUsage = await executeQuery(
+            'SELECT COUNT(*) as count FROM job_skills WHERE skill_id = ?',
             [id]
         );
 
-        if (studentSkillsCheck.success && studentSkillsCheck.data.length > 0) {
+        if (studentUsage.success && studentUsage.data[0].count > 0) {
             return res.status(400).json({
                 success: false,
                 message: 'Cannot delete skill that is assigned to students'
+            });
+        }
+
+        if (jobUsage.success && jobUsage.data[0].count > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot delete skill that is required by jobs'
             });
         }
 
@@ -312,10 +325,12 @@ router.delete('/:id', async (req, res) => {
 // Get skill categories
 router.get('/categories/list', async (req, res) => {
     try {
-        const result = await executeQuery(
-            'SELECT DISTINCT category FROM skills WHERE category IS NOT NULL ORDER BY category',
-            []
-        );
+        const result = await executeQuery(`
+            SELECT DISTINCT category 
+            FROM skills 
+            WHERE category IS NOT NULL 
+            ORDER BY category
+        `);
 
         if (result.success) {
             res.json({
@@ -339,32 +354,50 @@ router.get('/categories/list', async (req, res) => {
     }
 });
 
-// Get skills by category
-router.get('/category/:category', async (req, res) => {
+// Get skill statistics
+router.get('/stats/overview', async (req, res) => {
     try {
-        const { category } = req.params;
-        const result = await executeQuery(
-            'SELECT * FROM skills WHERE category = ? ORDER BY skill_name',
-            [category]
-        );
+        const statsResult = await executeQuery(`
+            SELECT 
+                category,
+                COUNT(*) as count
+            FROM skills 
+            GROUP BY category
+            ORDER BY count DESC
+        `);
 
-        if (result.success) {
+        const usageResult = await executeQuery(`
+            SELECT 
+                s.category,
+                COUNT(DISTINCT ss.stud_id) as students_using,
+                COUNT(DISTINCT js.job_id) as jobs_requiring
+            FROM skills s
+            LEFT JOIN student_skills ss ON s.skill_id = ss.skill_id
+            LEFT JOIN job_skills js ON s.skill_id = js.skill_id
+            GROUP BY s.category
+            ORDER BY students_using DESC, jobs_requiring DESC
+        `);
+
+        if (statsResult.success && usageResult.success) {
             res.json({
                 success: true,
-                data: result.data
+                data: {
+                    byCategory: statsResult.data,
+                    usage: usageResult.data
+                }
             });
         } else {
             res.status(500).json({
                 success: false,
-                message: 'Failed to fetch skills by category',
-                error: result.error
+                message: 'Failed to fetch skill statistics',
+                error: 'Database query failed'
             });
         }
     } catch (error) {
-        console.error('Get skills by category error:', error);
+        console.error('Get skill stats error:', error);
         res.status(500).json({
             success: false,
-            message: 'Server error fetching skills by category',
+            message: 'Server error fetching skill statistics',
             error: error.message
         });
     }

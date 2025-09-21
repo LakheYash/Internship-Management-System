@@ -10,39 +10,39 @@ router.get('/', async (req, res) => {
         const { status, company_id, intern_id, page = 1, limit = 10 } = req.query;
         let sql = `
             SELECT 
-                i.*,
+                j.*,
                 c.name as company_name,
                 c.industry as company_industry,
-                intern.name as intern_name,
-                intern.email as intern_email
-            FROM internships i
-            LEFT JOIN companies c ON i.company_id = c.id
-            LEFT JOIN interns intern ON i.intern_id = intern.id
+                CONCAT(s.first_name, ' ', s.last_name) as intern_name,
+                s.email as intern_email
+            FROM jobs j
+            LEFT JOIN company c ON j.comp_id = c.comp_id
+            LEFT JOIN students s ON j.stud_id = s.stud_id
             WHERE 1=1
         `;
         const params = [];
 
         // Add status filter
         if (status) {
-            sql += ' AND i.status = ?';
+            sql += ' AND j.status = ?';
             params.push(status);
         }
 
         // Add company filter
         if (company_id) {
-            sql += ' AND i.company_id = ?';
+            sql += ' AND j.comp_id = ?';
             params.push(company_id);
         }
 
         // Add intern filter
         if (intern_id) {
-            sql += ' AND i.intern_id = ?';
+            sql += ' AND j.stud_id = ?';
             params.push(intern_id);
         }
 
         // Add pagination
         const offset = (page - 1) * limit;
-        sql += ' ORDER BY i.created_at DESC LIMIT ? OFFSET ?';
+        sql += ' ORDER BY j.created_at DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limit), parseInt(offset));
 
         const result = await executeQuery(sql, params);

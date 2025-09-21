@@ -4,11 +4,11 @@ const { executeQuery } = require('../database/connection');
 
 const router = express.Router();
 
-// Get all interns
+// Get all students
 router.get('/', async (req, res) => {
     try {
         const { status, search, page = 1, limit = 10 } = req.query;
-        let sql = 'SELECT * FROM interns WHERE 1=1';
+        let sql = 'SELECT * FROM students WHERE 1=1';
         const params = [];
 
         // Add status filter
@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 
         // Add search filter
         if (search) {
-            sql += ' AND (name LIKE ? OR email LIKE ? OR university LIKE ? OR major LIKE ?)';
+            sql += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR city LIKE ?)';
             const searchTerm = `%${search}%`;
             params.push(searchTerm, searchTerm, searchTerm, searchTerm);
         }
@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
 
         if (result.success) {
             // Get total count for pagination
-            let countSql = 'SELECT COUNT(*) as total FROM interns WHERE 1=1';
+            let countSql = 'SELECT COUNT(*) as total FROM students WHERE 1=1';
             const countParams = [];
             
             if (status) {
@@ -42,7 +42,7 @@ router.get('/', async (req, res) => {
             }
             
             if (search) {
-                countSql += ' AND (name LIKE ? OR email LIKE ? OR university LIKE ? OR major LIKE ?)';
+                countSql += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR city LIKE ?)';
                 const searchTerm = `%${search}%`;
                 countParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
             }
@@ -63,25 +63,25 @@ router.get('/', async (req, res) => {
         } else {
             res.status(500).json({
                 success: false,
-                message: 'Failed to fetch interns',
+                message: 'Failed to fetch students',
                 error: result.error
             });
         }
     } catch (error) {
-        console.error('Get interns error:', error);
+        console.error('Get students error:', error);
         res.status(500).json({
             success: false,
-            message: 'Server error fetching interns',
+            message: 'Server error fetching students',
             error: error.message
         });
     }
 });
 
 // Get intern by ID
-router.get('/:id', async (req, res) => {
+router.get('/:stud_id', async (req, res) => {
     try {
-        const { id } = req.params;
-        const result = await executeQuery('SELECT * FROM interns WHERE id = ?', [id]);
+        const { stud_id } = req.params;
+        const result = await executeQuery('SELECT * FROM students WHERE stud_stud_id = ?', [stud_id]);
 
         if (result.success) {
             if (result.data.length > 0) {
@@ -114,48 +114,49 @@ router.get('/:id', async (req, res) => {
 
 // Create new intern
 router.post('/', [
-    body('name').notEmpty().withMessage('Name is required'),
-    body('email').isEmail().withMessage('Please provide a valid email'),
+    body('first_name').notEmpty().withMessage('First name is required'),
+    body('last_name').notEmpty().withMessage('Last name is required'),
+    body('email').isEmail().withMessage('Please provstud_ide a valstud_id email'),
     body('phone').optional().isLength({ min: 10 }).withMessage('Phone number must be at least 10 characters'),
-    body('university').notEmpty().withMessage('University is required'),
-    body('major').notEmpty().withMessage('Major is required'),
-    body('status').optional().isIn(['Available', 'Assigned', 'Completed', 'Inactive']).withMessage('Invalid status')
+    body('city').optional().notEmpty().withMessage('City is required'),
+    body('state').optional().notEmpty().withMessage('State is required'),
+    body('status').optional().isIn(['Available', 'Applied', 'Selected', 'Completed', 'Inactive']).withMessage('Invalstud_id status')
 ], async (req, res) => {
     try {
-        const errors = validationResult(req);
+        const errors = valstud_idationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({
                 success: false,
-                message: 'Validation failed',
+                message: 'Valstud_idation failed',
                 errors: errors.array()
             });
         }
 
-        const { name, email, phone, university, major, graduation_year, gpa, skills, status = 'Available' } = req.body;
+        const { first_name, last_name, email, phone, city, state, pin, age, status = 'Available' } = req.body;
 
         // Check if email already exists
-        const existingIntern = await executeQuery(
-            'SELECT id FROM interns WHERE email = ?',
+        const existingStudent = await executeQuery(
+            'SELECT stud_stud_id FROM students WHERE email = ?',
             [email]
         );
 
-        if (existingIntern.success && existingIntern.data.length > 0) {
+        if (existingStudent.success && existingStudent.data.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Intern with this email already exists'
+                message: 'Student with this email already exists'
             });
         }
 
         const result = await executeQuery(
-            'INSERT INTO interns (name, email, phone, university, major, graduation_year, gpa, skills, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [name, email, phone, university, major, graduation_year, gpa, skills, status]
+            'INSERT INTO students (first_name, last_name, email, phone, city, state, pin, age, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [first_name, last_name, email, phone, city, state, pin, age, status]
         );
 
         if (result.success) {
             res.status(201).json({
                 success: true,
                 message: 'Intern created successfully',
-                data: { id: result.data.insertId }
+                data: { stud_id: result.data.insertId }
             });
         } else {
             res.status(500).json({
@@ -175,29 +176,29 @@ router.post('/', [
 });
 
 // Update intern
-router.put('/:id', [
+router.put('/:stud_id', [
     body('name').optional().notEmpty().withMessage('Name cannot be empty'),
-    body('email').optional().isEmail().withMessage('Please provide a valid email'),
+    body('email').optional().isEmail().withMessage('Please provstud_ide a valstud_id email'),
     body('phone').optional().isLength({ min: 10 }).withMessage('Phone number must be at least 10 characters'),
     body('university').optional().notEmpty().withMessage('University cannot be empty'),
     body('major').optional().notEmpty().withMessage('Major cannot be empty'),
-    body('status').optional().isIn(['Available', 'Assigned', 'Completed', 'Inactive']).withMessage('Invalid status')
+    body('status').optional().isIn(['Available', 'Assigned', 'Completed', 'Inactive']).withMessage('Invalstud_id status')
 ], async (req, res) => {
     try {
-        const errors = validationResult(req);
+        const errors = valstud_idationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({
                 success: false,
-                message: 'Validation failed',
+                message: 'Valstud_idation failed',
                 errors: errors.array()
             });
         }
 
-        const { id } = req.params;
-        const { name, email, phone, university, major, graduation_year, gpa, skills, status } = req.body;
+        const { stud_id } = req.params;
+        const { first_name, last_name, email, phone, city, state, pin, age, status } = req.body;
 
         // Check if intern exists
-        const existingIntern = await executeQuery('SELECT id FROM interns WHERE id = ?', [id]);
+        const existingIntern = await executeQuery('SELECT stud_id FROM students WHERE stud_id = ?', [stud_id]);
         if (!existingIntern.success || existingIntern.data.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -208,8 +209,8 @@ router.put('/:id', [
         // Check if email is being changed and if it already exists
         if (email) {
             const emailCheck = await executeQuery(
-                'SELECT id FROM interns WHERE email = ? AND id != ?',
-                [email, id]
+                'SELECT stud_id FROM students WHERE email = ? AND stud_id != ?',
+                [email, stud_id]
             );
             if (emailCheck.success && emailCheck.data.length > 0) {
                 return res.status(400).json({
@@ -223,9 +224,13 @@ router.put('/:id', [
         const updateFields = [];
         const updateValues = [];
 
-        if (name !== undefined) {
-            updateFields.push('name = ?');
-            updateValues.push(name);
+        if (first_name !== undefined) {
+            updateFields.push('first_name = ?');
+            updateValues.push(first_name);
+        }
+        if (last_name !== undefined) {
+            updateFields.push('last_name = ?');
+            updateValues.push(last_name);
         }
         if (email !== undefined) {
             updateFields.push('email = ?');
@@ -235,25 +240,21 @@ router.put('/:id', [
             updateFields.push('phone = ?');
             updateValues.push(phone);
         }
-        if (university !== undefined) {
-            updateFields.push('university = ?');
-            updateValues.push(university);
+        if (city !== undefined) {
+            updateFields.push('city = ?');
+            updateValues.push(city);
         }
-        if (major !== undefined) {
-            updateFields.push('major = ?');
-            updateValues.push(major);
+        if (state !== undefined) {
+            updateFields.push('state = ?');
+            updateValues.push(state);
         }
-        if (graduation_year !== undefined) {
-            updateFields.push('graduation_year = ?');
-            updateValues.push(graduation_year);
+        if (pin !== undefined) {
+            updateFields.push('pin = ?');
+            updateValues.push(pin);
         }
-        if (gpa !== undefined) {
-            updateFields.push('gpa = ?');
-            updateValues.push(gpa);
-        }
-        if (skills !== undefined) {
-            updateFields.push('skills = ?');
-            updateValues.push(skills);
+        if (age !== undefined) {
+            updateFields.push('age = ?');
+            updateValues.push(age);
         }
         if (status !== undefined) {
             updateFields.push('status = ?');
@@ -267,10 +268,10 @@ router.put('/:id', [
             });
         }
 
-        updateValues.push(id);
+        updateValues.push(stud_id);
 
         const result = await executeQuery(
-            `UPDATE interns SET ${updateFields.join(', ')} WHERE id = ?`,
+            `UPDATE students SET ${updateFields.join(', ')} WHERE stud_id = ?`,
             updateValues
         );
 
@@ -297,12 +298,12 @@ router.put('/:id', [
 });
 
 // Delete intern
-router.delete('/:id', async (req, res) => {
+router.delete('/:stud_id', async (req, res) => {
     try {
-        const { id } = req.params;
+        const { stud_id } = req.params;
 
         // Check if intern exists
-        const existingIntern = await executeQuery('SELECT id FROM interns WHERE id = ?', [id]);
+        const existingIntern = await executeQuery('SELECT stud_id FROM students WHERE stud_id = ?', [stud_id]);
         if (!existingIntern.success || existingIntern.data.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -310,20 +311,20 @@ router.delete('/:id', async (req, res) => {
             });
         }
 
-        // Check if intern is assigned to any active internships
-        const activeInternships = await executeQuery(
-            'SELECT id FROM internships WHERE intern_id = ? AND status = "Active"',
-            [id]
+        // Check if student is assigned to any active applications
+        const activeApplications = await executeQuery(
+            'SELECT app_id FROM application WHERE stud_id = ? AND status IN ("Pending", "Under Review", "Shortlisted")',
+            [stud_id]
         );
 
-        if (activeInternships.success && activeInternships.data.length > 0) {
+        if (activeApplications.success && activeApplications.data.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Cannot delete intern with active internships'
+                message: 'Cannot delete student with active applications'
             });
         }
 
-        const result = await executeQuery('DELETE FROM interns WHERE id = ?', [id]);
+        const result = await executeQuery('DELETE FROM students WHERE stud_id = ?', [stud_id]);
 
         if (result.success) {
             res.json({
@@ -354,7 +355,7 @@ router.get('/stats/overview', async (req, res) => {
             SELECT 
                 status,
                 COUNT(*) as count
-            FROM interns 
+            FROM students 
             GROUP BY status
         `);
 

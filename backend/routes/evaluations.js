@@ -11,19 +11,21 @@ router.get('/', async (req, res) => {
         let sql = `
             SELECT 
                 e.*,
-                i.title as internship_title,
+                a.app_id,
+                j.title as job_title,
                 c.name as company_name,
-                intern.name as intern_name
+                CONCAT(s.first_name, ' ', s.last_name) as student_name
             FROM evaluations e
-            LEFT JOIN internships i ON e.internship_id = i.id
-            LEFT JOIN companies c ON i.company_id = c.id
-            LEFT JOIN interns intern ON i.intern_id = intern.id
+            LEFT JOIN application a ON e.app_id = a.app_id
+            LEFT JOIN jobs j ON a.job_id = j.job_id
+            LEFT JOIN company c ON j.comp_id = c.comp_id
+            LEFT JOIN students s ON a.stud_id = s.stud_id
             WHERE 1=1
         `;
         const params = [];
 
         if (internship_id) {
-            sql += ' AND e.internship_id = ?';
+            sql += ' AND a.job_id = ?';
             params.push(internship_id);
         }
 

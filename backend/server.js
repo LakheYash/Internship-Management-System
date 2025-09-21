@@ -14,9 +14,15 @@ const jobRoutes = require('./routes/jobs');
 const applicationRoutes = require('./routes/applications');
 const interviewRoutes = require('./routes/interviews');
 const skillRoutes = require('./routes/skills');
+const studentSkillRoutes = require('./routes/student-skills');
 const educationRoutes = require('./routes/education');
 const projectRoutes = require('./routes/projects');
 const notificationRoutes = require('./routes/notifications');
+const analyticsRoutes = require('./routes/analytics');
+const internRoutes = require('./routes/interns');
+const internshipRoutes = require('./routes/internships');
+const evaluationRoutes = require('./routes/evaluations');
+const taskRoutes = require('./routes/tasks');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -65,9 +71,15 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/interviews', interviewRoutes);
 app.use('/api/skills', skillRoutes);
+app.use('/api/student-skills', studentSkillRoutes);
 app.use('/api/education', educationRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/interns', internRoutes);
+app.use('/api/internships', internshipRoutes);
+app.use('/api/evaluations', evaluationRoutes);
+app.use('/api/tasks', taskRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -82,9 +94,15 @@ app.get('/', (req, res) => {
             applications: '/api/applications',
             interviews: '/api/interviews',
             skills: '/api/skills',
+            studentSkills: '/api/student-skills',
             education: '/api/education',
             projects: '/api/projects',
-            notifications: '/api/notifications'
+            notifications: '/api/notifications',
+            analytics: '/api/analytics',
+            interns: '/api/interns',
+            internships: '/api/internships',
+            evaluations: '/api/evaluations',
+            tasks: '/api/tasks'
         }
     });
 });
