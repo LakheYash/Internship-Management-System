@@ -104,18 +104,15 @@ async function loadDashboardData() {
             fetchData('/applications')
         ]);
 
-        // Update dashboard cards
-        document.getElementById('total-students').textContent = studentsData.length;
-        document.getElementById('total-companies').textContent = companiesData.length;
-        document.getElementById('active-jobs').textContent = 
-            jobsData.filter(j => j.status === 'Active').length;
-        document.getElementById('total-applications').textContent = applicationsData.length;
+        document.getElementById('total-students').textContent = (studentsData || []).length;
+        document.getElementById('total-companies').textContent = (companiesData || []).length;
+        document.getElementById('active-jobs').textContent = (jobsData || []).filter(j => j.status === 'Active').length;
+        document.getElementById('total-applications').textContent = (applicationsData || []).length;
 
-        // Store data globally
-        students = studentsData;
-        companies = companiesData;
-        jobs = jobsData;
-        applications = applicationsData;
+        students = studentsData || [];
+        companies = companiesData || [];
+        jobs = jobsData || [];
+        applications = applicationsData || [];
 
     } catch (error) {
         console.error('Error loading dashboard data:', error);
@@ -123,37 +120,38 @@ async function loadDashboardData() {
     }
 }
 
-// Interns Management
-async function loadInterns() {
+// Students Management
+async function loadStudents() {
     try {
-        const data = await fetchData('/interns');
-        interns = data;
-        displayInterns(data);
+        const data = await fetchData('/students');
+        students = data;
+        displayStudents(data);
     } catch (error) {
-        console.error('Error loading interns:', error);
-        showAlert('Error loading interns data', 'danger');
+        console.error('Error loading students:', error);
+        showAlert('Error loading students data', 'danger');
     }
 }
 
-function displayInterns(internsData) {
-    const tbody = document.getElementById('internsTableBody');
+function displayStudents(studentsData) {
+    const tbody = document.getElementById('studentsTableBody');
     tbody.innerHTML = '';
 
-    internsData.forEach(intern => {
+    studentsData.forEach(s => {
         const row = document.createElement('tr');
+        const fullName = [s.first_name, s.last_name].filter(Boolean).join(' ');
         row.innerHTML = `
-            <td>${intern.id}</td>
-            <td>${intern.name}</td>
-            <td>${intern.email}</td>
-            <td>${intern.phone}</td>
-            <td>${intern.university}</td>
-            <td>${intern.major}</td>
-            <td><span class="badge badge-${intern.status.toLowerCase()}">${intern.status}</span></td>
+            <td>${s.stud_id}</td>
+            <td>${fullName}</td>
+            <td>${s.email || ''}</td>
+            <td>${s.phone || ''}</td>
+            <td>${s.city || ''}</td>
+            <td>${s.state || ''}</td>
+            <td><span class="badge bg-secondary">${s.status}</span></td>
             <td class="action-buttons">
-                <button class="btn btn-sm btn-primary" onclick="editIntern(${intern.id})">
+                <button class="btn btn-sm btn-primary" onclick="editStudent(${s.stud_id})">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteIntern(${intern.id})">
+                <button class="btn btn-sm btn-danger" onclick="deleteStudent(${s.stud_id})">
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
@@ -162,74 +160,85 @@ function displayInterns(internsData) {
     });
 }
 
-async function handleAddIntern(e) {
+async function handleAddStudent(e) {
     e.preventDefault();
-    
+
     const formData = {
-        name: document.getElementById('internName').value,
-        email: document.getElementById('internEmail').value,
-        phone: document.getElementById('internPhone').value,
-        university: document.getElementById('internUniversity').value,
-        major: document.getElementById('internMajor').value,
-        status: document.getElementById('internStatus').value
+        first_name: document.getElementById('studentFirstName').value,
+        last_name: document.getElementById('studentLastName').value,
+        email: document.getElementById('studentEmail').value,
+        phone: document.getElementById('studentPhone').value,
+        city: document.getElementById('studentCity').value,
+        state: document.getElementById('studentState').value,
+        age: document.getElementById('studentAge').value ? parseInt(document.getElementById('studentAge').value) : null,
+        status: document.getElementById('studentStatus').value
     };
 
     try {
-        await postData('/interns', formData);
-        showAlert('Intern added successfully!', 'success');
-        bootstrap.Modal.getInstance(document.getElementById('addInternModal')).hide();
-        document.getElementById('addInternForm').reset();
-        loadInterns();
+        await postData('/students', formData);
+        showAlert('Student added successfully!', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('addStudentModal')).hide();
+        document.getElementById('addStudentForm').reset();
+        loadStudents();
         loadDashboardData();
     } catch (error) {
-        console.error('Error adding intern:', error);
-        showAlert('Error adding intern', 'danger');
+        console.error('Error adding student:', error);
+        showAlert('Error adding student', 'danger');
     }
 }
 
-async function editIntern(id) {
-    const intern = interns.find(i => i.id === id);
-    if (!intern) return;
+async function editStudent(id) {
+    const student = students.find(s => s.stud_id === id);
+    if (!student) return;
 
-    // Pre-fill form with intern data
-    document.getElementById('internName').value = intern.name;
-    document.getElementById('internEmail').value = intern.email;
-    document.getElementById('internPhone').value = intern.phone;
-    document.getElementById('internUniversity').value = intern.university;
-    document.getElementById('internMajor').value = intern.major;
-    document.getElementById('internStatus').value = intern.status;
+    document.getElementById('studentFirstName').value = student.first_name || '';
+    document.getElementById('studentLastName').value = student.last_name || '';
+    document.getElementById('studentEmail').value = student.email || '';
+    document.getElementById('studentPhone').value = student.phone || '';
+    document.getElementById('studentCity').value = student.city || '';
+    document.getElementById('studentState').value = student.state || '';
+    document.getElementById('studentAge').value = student.age || '';
+    document.getElementById('studentStatus').value = student.status || 'Available';
 
-    // Show modal
-    const modal = new bootstrap.Modal(document.getElementById('addInternModal'));
+    const modal = new bootstrap.Modal(document.getElementById('addStudentModal'));
     modal.show();
 
-    // Update form to handle edit
-    const form = document.getElementById('addInternForm');
+    const form = document.getElementById('addStudentForm');
     form.onsubmit = async (e) => {
         e.preventDefault();
+        const updateData = {
+            first_name: document.getElementById('studentFirstName').value,
+            last_name: document.getElementById('studentLastName').value,
+            email: document.getElementById('studentEmail').value,
+            phone: document.getElementById('studentPhone').value,
+            city: document.getElementById('studentCity').value,
+            state: document.getElementById('studentState').value,
+            age: document.getElementById('studentAge').value ? parseInt(document.getElementById('studentAge').value) : null,
+            status: document.getElementById('studentStatus').value
+        };
         try {
-            await putData(`/interns/${id}`, formData);
-            showAlert('Intern updated successfully!', 'success');
+            await putData(`/students/${id}`, updateData);
+            showAlert('Student updated successfully!', 'success');
             modal.hide();
-            loadInterns();
+            loadStudents();
             loadDashboardData();
         } catch (error) {
-            console.error('Error updating intern:', error);
-            showAlert('Error updating intern', 'danger');
+            console.error('Error updating student:', error);
+            showAlert('Error updating student', 'danger');
         }
     };
 }
 
-async function deleteIntern(id) {
-    if (confirm('Are you sure you want to delete this intern?')) {
+async function deleteStudent(id) {
+    if (confirm('Are you sure you want to delete this student?')) {
         try {
-            await deleteData(`/interns/${id}`);
-            showAlert('Intern deleted successfully!', 'success');
-            loadInterns();
+            await deleteData(`/students/${id}`);
+            showAlert('Student deleted successfully!', 'success');
+            loadStudents();
             loadDashboardData();
         } catch (error) {
-            console.error('Error deleting intern:', error);
-            showAlert('Error deleting intern', 'danger');
+            console.error('Error deleting student:', error);
+            showAlert('Error deleting student', 'danger');
         }
     }
 }
@@ -253,18 +262,18 @@ function displayCompanies(companiesData) {
     companiesData.forEach(company => {
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${company.id}</td>
+            <td>${company.comp_id}</td>
             <td>${company.name}</td>
-            <td>${company.industry}</td>
-            <td>${company.contact_person}</td>
-            <td>${company.email}</td>
-            <td>${company.phone}</td>
-            <td>${company.location}</td>
+            <td>${company.industry || ''}</td>
+            <td>${company.hr_name || ''}</td>
+            <td>${company.hr_email || ''}</td>
+            <td>${company.contact_no || ''}</td>
+            <td>${[company.city, company.state].filter(Boolean).join(', ')}</td>
             <td class="action-buttons">
-                <button class="btn btn-sm btn-primary" onclick="editCompany(${company.id})">
+                <button class="btn btn-sm btn-primary" onclick="editCompany(${company.comp_id})">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteCompany(${company.id})">
+                <button class="btn btn-sm btn-danger" onclick="deleteCompany(${company.comp_id})">
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
@@ -279,10 +288,12 @@ async function handleAddCompany(e) {
     const formData = {
         name: document.getElementById('companyName').value,
         industry: document.getElementById('companyIndustry').value,
-        contact_person: document.getElementById('companyContact').value,
-        email: document.getElementById('companyEmail').value,
-        phone: document.getElementById('companyPhone').value,
-        location: document.getElementById('companyLocation').value
+        hr_name: document.getElementById('companyHrName').value,
+        hr_email: document.getElementById('companyHrEmail').value,
+        contact_no: document.getElementById('companyContactNo').value,
+        city: document.getElementById('companyCity').value,
+        state: document.getElementById('companyState').value,
+        website: document.getElementById('companyWebsite').value
     };
 
     try {
@@ -299,20 +310,47 @@ async function handleAddCompany(e) {
 }
 
 async function editCompany(id) {
-    const company = companies.find(c => c.id === id);
+    const company = companies.find(c => c.comp_id === id);
     if (!company) return;
 
     // Pre-fill form with company data
     document.getElementById('companyName').value = company.name;
     document.getElementById('companyIndustry').value = company.industry;
-    document.getElementById('companyContact').value = company.contact_person;
-    document.getElementById('companyEmail').value = company.email;
-    document.getElementById('companyPhone').value = company.phone;
-    document.getElementById('companyLocation').value = company.location;
+    document.getElementById('companyHrName').value = company.hr_name || '';
+    document.getElementById('companyHrEmail').value = company.hr_email || '';
+    document.getElementById('companyContactNo').value = company.contact_no || '';
+    document.getElementById('companyCity').value = company.city || '';
+    document.getElementById('companyState').value = company.state || '';
+    document.getElementById('companyWebsite').value = company.website || '';
 
     // Show modal
     const modal = new bootstrap.Modal(document.getElementById('addCompanyModal'));
     modal.show();
+
+    const form = document.getElementById('addCompanyForm');
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const updateData = {
+            name: document.getElementById('companyName').value,
+            industry: document.getElementById('companyIndustry').value,
+            hr_name: document.getElementById('companyHrName').value,
+            hr_email: document.getElementById('companyHrEmail').value,
+            contact_no: document.getElementById('companyContactNo').value,
+            city: document.getElementById('companyCity').value,
+            state: document.getElementById('companyState').value,
+            website: document.getElementById('companyWebsite').value
+        };
+        try {
+            await putData(`/companies/${id}`, updateData);
+            showAlert('Company updated successfully!', 'success');
+            modal.hide();
+            loadCompanies();
+            loadDashboardData();
+        } catch (error) {
+            console.error('Error updating company:', error);
+            showAlert('Error updating company', 'danger');
+        }
+    };
 }
 
 async function deleteCompany(id) {
@@ -329,41 +367,39 @@ async function deleteCompany(id) {
     }
 }
 
-// Internships Management
-async function loadInternships() {
+// Jobs Management
+async function loadJobs() {
     try {
-        const data = await fetchData('/internships');
-        internships = data;
-        displayInternships(data);
-        populateInternshipDropdowns();
+        const data = await fetchData('/jobs');
+        jobs = data;
+        displayJobs(data);
+        populateJobCompanyDropdown();
     } catch (error) {
-        console.error('Error loading internships:', error);
-        showAlert('Error loading internships data', 'danger');
+        console.error('Error loading jobs:', error);
+        showAlert('Error loading jobs data', 'danger');
     }
 }
 
-function displayInternships(internshipsData) {
-    const tbody = document.getElementById('internshipsTableBody');
+function displayJobs(jobsData) {
+    const tbody = document.getElementById('jobsTableBody');
     tbody.innerHTML = '';
 
-    internshipsData.forEach(internship => {
-        const company = companies.find(c => c.id === internship.company_id);
-        const intern = interns.find(i => i.id === internship.intern_id);
-        
+    jobsData.forEach(j => {
+        const company = companies.find(c => c.comp_id === j.comp_id);
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${internship.id}</td>
-            <td>${internship.title}</td>
-            <td>${company ? company.name : 'N/A'}</td>
-            <td>${intern ? intern.name : 'N/A'}</td>
-            <td>${formatDate(internship.start_date)}</td>
-            <td>${formatDate(internship.end_date)}</td>
-            <td><span class="badge badge-${internship.status.toLowerCase()}">${internship.status}</span></td>
+            <td>${j.job_id}</td>
+            <td>${j.title}</td>
+            <td>${company ? company.name : (j.company_name || 'N/A')}</td>
+            <td>${j.job_type}</td>
+            <td>${j.salary != null ? j.salary : ''}</td>
+            <td>${[j.city, j.state].filter(Boolean).join(', ')}</td>
+            <td><span class="badge bg-secondary">${j.status}</span></td>
             <td class="action-buttons">
-                <button class="btn btn-sm btn-primary" onclick="editInternship(${internship.id})">
+                <button class="btn btn-sm btn-primary" onclick="editJob(${j.job_id})">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteInternship(${internship.id})">
+                <button class="btn btn-sm btn-danger" onclick="deleteJob(${j.job_id})">
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
@@ -372,80 +408,108 @@ function displayInternships(internshipsData) {
     });
 }
 
-function populateInternshipDropdowns() {
-    // Populate company dropdown
-    const companySelect = document.getElementById('internshipCompany');
+function populateJobCompanyDropdown() {
+    const companySelect = document.getElementById('jobCompany');
+    if (!companySelect) return;
     companySelect.innerHTML = '<option value="">Select Company</option>';
     companies.forEach(company => {
         const option = document.createElement('option');
-        option.value = company.id;
+        option.value = company.comp_id;
         option.textContent = company.name;
         companySelect.appendChild(option);
     });
-
-    // Populate intern dropdown
-    const internSelect = document.getElementById('internshipIntern');
-    internSelect.innerHTML = '<option value="">Select Intern</option>';
-    interns.forEach(intern => {
-        const option = document.createElement('option');
-        option.value = intern.id;
-        option.textContent = intern.name;
-        internSelect.appendChild(option);
-    });
 }
 
-async function handleAddInternship(e) {
+async function handleAddJob(e) {
     e.preventDefault();
-    
+
     const formData = {
-        title: document.getElementById('internshipTitle').value,
-        company_id: parseInt(document.getElementById('internshipCompany').value),
-        intern_id: parseInt(document.getElementById('internshipIntern').value),
-        start_date: document.getElementById('internshipStartDate').value,
-        end_date: document.getElementById('internshipEndDate').value,
-        status: document.getElementById('internshipStatus').value
+        title: document.getElementById('jobTitle').value,
+        description: document.getElementById('jobDescription').value,
+        comp_id: parseInt(document.getElementById('jobCompany').value),
+        admin_id: 1,
+        required_skills: document.getElementById('jobRequiredSkills').value,
+        salary: document.getElementById('jobSalary').value ? parseFloat(document.getElementById('jobSalary').value) : null,
+        job_type: document.getElementById('jobType').value,
+        city: document.getElementById('jobCity').value,
+        state: document.getElementById('jobState').value,
+        posted_date: document.getElementById('jobPostedDate').value,
+        deadline: document.getElementById('jobDeadline').value || null,
+        status: document.getElementById('jobStatus').value,
+        requirements: ''
     };
 
     try {
-        await postData('/internships', formData);
-        showAlert('Internship added successfully!', 'success');
-        bootstrap.Modal.getInstance(document.getElementById('addInternshipModal')).hide();
-        document.getElementById('addInternshipForm').reset();
-        loadInternships();
+        await postData('/jobs', formData);
+        showAlert('Job added successfully!', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('addJobModal')).hide();
+        document.getElementById('addJobForm').reset();
+        loadJobs();
         loadDashboardData();
     } catch (error) {
-        console.error('Error adding internship:', error);
-        showAlert('Error adding internship', 'danger');
+        console.error('Error adding job:', error);
+        showAlert('Error adding job', 'danger');
     }
 }
 
-async function editInternship(id) {
-    const internship = internships.find(i => i.id === id);
-    if (!internship) return;
+async function editJob(id) {
+    const job = jobs.find(j => j.job_id === id);
+    if (!job) return;
 
-    // Pre-fill form with internship data
-    document.getElementById('internshipTitle').value = internship.title;
-    document.getElementById('internshipCompany').value = internship.company_id;
-    document.getElementById('internshipIntern').value = internship.intern_id;
-    document.getElementById('internshipStartDate').value = internship.start_date;
-    document.getElementById('internshipEndDate').value = internship.end_date;
-    document.getElementById('internshipStatus').value = internship.status;
+    document.getElementById('jobTitle').value = job.title || '';
+    document.getElementById('jobDescription').value = job.description || '';
+    document.getElementById('jobCompany').value = job.comp_id || '';
+    document.getElementById('jobType').value = job.job_type || 'Internship';
+    document.getElementById('jobSalary').value = job.salary != null ? job.salary : '';
+    document.getElementById('jobCity').value = job.city || '';
+    document.getElementById('jobState').value = job.state || '';
+    document.getElementById('jobPostedDate').value = job.posted_date ? job.posted_date.substring(0, 10) : '';
+    document.getElementById('jobDeadline').value = job.deadline ? job.deadline.substring(0, 10) : '';
+    document.getElementById('jobRequiredSkills').value = job.required_skills || '';
+    document.getElementById('jobStatus').value = job.status || 'Active';
 
-    // Show modal
-    const modal = new bootstrap.Modal(document.getElementById('addInternshipModal'));
+    const modal = new bootstrap.Modal(document.getElementById('addJobModal'));
     modal.show();
-}
 
-async function deleteInternship(id) {
-    if (confirm('Are you sure you want to delete this internship?')) {
+    const form = document.getElementById('addJobForm');
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const updateData = {
+            title: document.getElementById('jobTitle').value,
+            description: document.getElementById('jobDescription').value,
+            comp_id: parseInt(document.getElementById('jobCompany').value),
+            required_skills: document.getElementById('jobRequiredSkills').value,
+            salary: document.getElementById('jobSalary').value ? parseFloat(document.getElementById('jobSalary').value) : null,
+            job_type: document.getElementById('jobType').value,
+            city: document.getElementById('jobCity').value,
+            state: document.getElementById('jobState').value,
+            posted_date: document.getElementById('jobPostedDate').value,
+            deadline: document.getElementById('jobDeadline').value || null,
+            status: document.getElementById('jobStatus').value
+        };
         try {
-            await deleteData(`/internships/${id}`);
-            showAlert('Internship deleted successfully!', 'success');
-            loadInternships();
+            await putData(`/jobs/${id}`, updateData);
+            showAlert('Job updated successfully!', 'success');
+            modal.hide();
+            loadJobs();
             loadDashboardData();
         } catch (error) {
-            console.error('Error deleting internship:', error);
-            showAlert('Error deleting internship', 'danger');
+            console.error('Error updating job:', error);
+            showAlert('Error updating job', 'danger');
+        }
+    };
+}
+
+async function deleteJob(id) {
+    if (confirm('Are you sure you want to delete this job?')) {
+        try {
+            await deleteData(`/jobs/${id}`);
+            showAlert('Job deleted successfully!', 'success');
+            loadJobs();
+            loadDashboardData();
+        } catch (error) {
+            console.error('Error deleting job:', error);
+            showAlert('Error deleting job', 'danger');
         }
     }
 }
@@ -543,7 +607,11 @@ async function fetchData(endpoint) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
         }
-        return await response.json();
+        const result = await response.json();
+        if (result && typeof result === 'object' && 'data' in result) {
+            return result.data;
+        }
+        return result;
     } catch (error) {
         console.error('API request failed:', error);
         showNotification('Error: ' + error.message, 'error');
@@ -564,7 +632,8 @@ async function postData(endpoint, data) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
         }
-        return await response.json();
+        const result = await response.json();
+        return ('data' in result) ? result.data : result;
     } catch (error) {
         console.error('API request failed:', error);
         showNotification('Error: ' + error.message, 'error');
@@ -585,7 +654,8 @@ async function putData(endpoint, data) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
         }
-        return await response.json();
+        const result = await response.json();
+        return ('data' in result) ? result.data : result;
     } catch (error) {
         console.error('API request failed:', error);
         showNotification('Error: ' + error.message, 'error');
@@ -602,7 +672,8 @@ async function deleteData(endpoint) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
         }
-        return await response.json();
+        const result = await response.json();
+        return ('data' in result) ? result.data : result;
     } catch (error) {
         console.error('API request failed:', error);
         showNotification('Error: ' + error.message, 'error');
@@ -639,14 +710,100 @@ function showAlert(message, type) {
 }
 
 // Global functions for onclick handlers
-function addIntern() {
-    document.getElementById('addInternForm').dispatchEvent(new Event('submit'));
-}
-
 function addCompany() {
     document.getElementById('addCompanyForm').dispatchEvent(new Event('submit'));
 }
 
 function addInternship() {
     document.getElementById('addInternshipForm').dispatchEvent(new Event('submit'));
+}
+
+// Applications
+async function loadApplications() {
+    try {
+        const data = await fetchData('/applications');
+        applications = data;
+        displayApplications(data);
+    } catch (error) {
+        console.error('Error loading applications:', error);
+        showAlert('Error loading applications data', 'danger');
+    }
+}
+
+function displayApplications(appsData) {
+    const tbody = document.getElementById('applicationsTableBody');
+    tbody.innerHTML = '';
+    appsData.forEach(a => {
+        const row = document.createElement('tr');
+        const studentName = [a.first_name, a.last_name].filter(Boolean).join(' ');
+        row.innerHTML = `
+            <td>${a.app_id}</td>
+            <td>${studentName}</td>
+            <td>${a.job_title || ''}</td>
+            <td>${a.company_name || ''}</td>
+            <td>${a.application_date ? formatDate(a.application_date) : ''}</td>
+            <td><span class="badge bg-secondary">${a.status}</span></td>
+            <td class="action-buttons"></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Interviews
+async function loadInterviews() {
+    try {
+        const data = await fetchData('/interviews');
+        interviews = data;
+        displayInterviews(data);
+    } catch (error) {
+        console.error('Error loading interviews:', error);
+        showAlert('Error loading interviews data', 'danger');
+    }
+}
+
+function displayInterviews(intData) {
+    const tbody = document.getElementById('interviewsTableBody');
+    tbody.innerHTML = '';
+    intData.forEach(i => {
+        const studentName = [i.first_name, i.last_name].filter(Boolean).join(' ');
+        row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${i.interview_id}</td>
+            <td>${studentName}</td>
+            <td>${i.job_title || ''}</td>
+            <td>${i.mode}</td>
+            <td>${i.interview_date ? new Date(i.interview_date).toLocaleString() : ''}</td>
+            <td>${i.interview_score != null ? i.interview_score : ''}</td>
+            <td><span class="badge bg-secondary">${i.status}</span></td>
+            <td class="action-buttons"></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Skills
+async function loadSkills() {
+    try {
+        const data = await fetchData('/skills');
+        skills = data;
+        displaySkills(data);
+    } catch (error) {
+        console.error('Error loading skills:', error);
+        showAlert('Error loading skills data', 'danger');
+    }
+}
+
+function displaySkills(skillsData) {
+    const tbody = document.getElementById('skillsTableBody');
+    tbody.innerHTML = '';
+    skillsData.forEach(s => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${s.skill_id}</td>
+            <td>${s.skill_name}</td>
+            <td>${s.category || ''}</td>
+            <td class="action-buttons"></td>
+        `;
+        tbody.appendChild(row);
+    });
 }

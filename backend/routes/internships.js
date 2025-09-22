@@ -4,27 +4,30 @@ const { executeQuery } = require('../database/connection');
 
 const router = express.Router();
 
-// Get all internships
+// Treat "internships" as applications of students to jobs
+// Get all applications (internships)
 router.get('/', async (req, res) => {
     try {
         const { status, company_id, intern_id, page = 1, limit = 10 } = req.query;
         let sql = `
             SELECT 
-                j.*,
+                a.*,
+                j.title as job_title,
                 c.name as company_name,
                 c.industry as company_industry,
                 CONCAT(s.first_name, ' ', s.last_name) as intern_name,
                 s.email as intern_email
-            FROM jobs j
-            LEFT JOIN company c ON j.comp_id = c.comp_id
-            LEFT JOIN students s ON j.stud_id = s.stud_id
+            FROM application a
+            JOIN jobs j ON a.job_id = j.job_id
+            JOIN company c ON j.comp_id = c.comp_id
+            JOIN students s ON a.stud_id = s.stud_id
             WHERE 1=1
         `;
         const params = [];
 
-        // Add status filter
+        // Add status filter (application status)
         if (status) {
-            sql += ' AND j.status = ?';
+            sql += ' AND a.status = ?';
             params.push(status);
         }
 
@@ -36,34 +39,37 @@ router.get('/', async (req, res) => {
 
         // Add intern filter
         if (intern_id) {
-            sql += ' AND j.stud_id = ?';
+            sql += ' AND a.stud_id = ?';
             params.push(intern_id);
         }
 
         // Add pagination
         const offset = (page - 1) * limit;
-        sql += ' ORDER BY j.created_at DESC LIMIT ? OFFSET ?';
+        sql += ' ORDER BY a.created_at DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limit), parseInt(offset));
 
         const result = await executeQuery(sql, params);
 
         if (result.success) {
             // Get total count for pagination
-            let countSql = 'SELECT COUNT(*) as total FROM internships i WHERE 1=1';
+            let countSql = `SELECT COUNT(*) as total 
+                            FROM application a 
+                            JOIN jobs j ON a.job_id = j.job_id 
+                            WHERE 1=1`;
             const countParams = [];
             
             if (status) {
-                countSql += ' AND i.status = ?';
+                countSql += ' AND a.status = ?';
                 countParams.push(status);
             }
             
             if (company_id) {
-                countSql += ' AND i.company_id = ?';
+                countSql += ' AND j.comp_id = ?';
                 countParams.push(company_id);
             }
             
             if (intern_id) {
-                countSql += ' AND i.intern_id = ?';
+                countSql += ' AND a.stud_id = ?';
                 countParams.push(intern_id);
             }
 
@@ -97,28 +103,23 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Get internship by ID
+// Get application (internship) by ID
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const result = await executeQuery(`
             SELECT 
-                i.*,
+                a.*,
+                j.title as job_title,
                 c.name as company_name,
                 c.industry as company_industry,
-                c.contact_person as company_contact,
-                c.email as company_email,
-                c.phone as company_phone,
-                c.location as company_location,
-                intern.name as intern_name,
-                intern.email as intern_email,
-                intern.phone as intern_phone,
-                intern.university,
-                intern.major
-            FROM internships i
-            LEFT JOIN companies c ON i.company_id = c.id
-            LEFT JOIN interns intern ON i.intern_id = intern.id
-            WHERE i.id = ?
+                CONCAT(s.first_name, ' ', s.last_name) as intern_name,
+                s.email as intern_email
+            FROM application a
+            JOIN jobs j ON a.job_id = j.job_id
+            JOIN company c ON j.comp_id = c.comp_id
+            JOIN students s ON a.stud_id = s.stud_id
+            WHERE a.app_id = ?
         `, [id]);
 
         if (result.success) {
@@ -150,14 +151,11 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// Create new internship
+// Create new application (internship)
 router.post('/', [
-    body('title').notEmpty().withMessage('Internship title is required'),
-    body('company_id').isInt().withMessage('Company ID must be a valid integer'),
-    body('intern_id').optional().isInt().withMessage('Intern ID must be a valid integer'),
-    body('start_date').isISO8601().withMessage('Start date must be a valid date'),
-    body('end_date').isISO8601().withMessage('End date must be a valid date'),
-    body('status').optional().isIn(['Active', 'Completed', 'Cancelled', 'On Hold']).withMessage('Invalid status')
+    body('stud_id').isInt().withMessage('Student ID must be a valid integer'),
+    body('job_id').isInt().withMessage('Job ID must be a valid integer'),
+    body('status').optional().isIn(['Pending', 'Under Review', 'Shortlisted', 'Rejected', 'Selected']).withMessage('Invalid status')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -169,82 +167,37 @@ router.post('/', [
             });
         }
 
-        const { 
-            title, 
-            description, 
-            company_id, 
-            intern_id, 
-            start_date, 
-            end_date, 
-            duration_weeks, 
-            stipend, 
-            status = 'Active',
-            supervisor_name,
-            supervisor_email,
-            supervisor_phone,
-            requirements,
-            learning_objectives
-        } = req.body;
+        const { stud_id, job_id, status = 'Pending', cover_letter, resume_url, additional_documents } = req.body;
 
-        // Validate dates
-        const startDate = new Date(start_date);
-        const endDate = new Date(end_date);
-        
-        if (startDate >= endDate) {
-            return res.status(400).json({
-                success: false,
-                message: 'End date must be after start date'
-            });
+        // Check if student exists
+        const studentCheck = await executeQuery('SELECT stud_id FROM students WHERE stud_id = ?', [stud_id]);
+        if (!studentCheck.success || studentCheck.data.length === 0) {
+            return res.status(400).json({ success: false, message: 'Student not found' });
         }
 
-        // Check if company exists
-        const companyCheck = await executeQuery('SELECT id FROM companies WHERE id = ? AND is_active = TRUE', [company_id]);
-        if (!companyCheck.success || companyCheck.data.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Company not found'
-            });
+        // Check if job exists
+        const jobCheck = await executeQuery('SELECT job_id FROM jobs WHERE job_id = ?', [job_id]);
+        if (!jobCheck.success || jobCheck.data.length === 0) {
+            return res.status(400).json({ success: false, message: 'Job not found' });
         }
 
-        // Check if intern exists (if provided)
-        if (intern_id) {
-            const internCheck = await executeQuery('SELECT id, status FROM interns WHERE id = ?', [intern_id]);
-            if (!internCheck.success || internCheck.data.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Intern not found'
-                });
-            }
-
-            // Check if intern is available
-            if (internCheck.data[0].status !== 'Available') {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Intern is not available for assignment'
-                });
-            }
+        // Prevent duplicate application
+        const dupCheck = await executeQuery('SELECT app_id FROM application WHERE stud_id = ? AND job_id = ?', [stud_id, job_id]);
+        if (dupCheck.success && dupCheck.data.length > 0) {
+            return res.status(400).json({ success: false, message: 'Application already exists for this student and job' });
         }
-
-        // Calculate duration if not provided
-        const calculatedDuration = duration_weeks || Math.ceil((endDate - startDate) / (7 * 24 * 60 * 60 * 1000));
 
         const result = await executeQuery(
-            `INSERT INTO internships 
-            (title, description, company_id, intern_id, start_date, end_date, duration_weeks, stipend, status, supervisor_name, supervisor_email, supervisor_phone, requirements, learning_objectives) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [title, description, company_id, intern_id, start_date, end_date, calculatedDuration, stipend, status, supervisor_name, supervisor_email, supervisor_phone, requirements, learning_objectives]
+            `INSERT INTO application (stud_id, job_id, status, application_date, cover_letter, resume_url, additional_documents)
+             VALUES (?, ?, ?, CURDATE(), ?, ?, ?)`,
+            [stud_id, job_id, status, cover_letter || null, resume_url || null, additional_documents || null]
         );
 
         if (result.success) {
-            // Update intern status if assigned
-            if (intern_id) {
-                await executeQuery('UPDATE interns SET status = "Assigned" WHERE id = ?', [intern_id]);
-            }
-
             res.status(201).json({
                 success: true,
-                message: 'Internship created successfully',
-                data: { id: result.data.insertId }
+                message: 'Application created successfully',
+                data: { app_id: result.data.insertId }
             });
         } else {
             res.status(500).json({
@@ -263,14 +216,9 @@ router.post('/', [
     }
 });
 
-// Update internship
+// Update application (internship)
 router.put('/:id', [
-    body('title').optional().notEmpty().withMessage('Title cannot be empty'),
-    body('company_id').optional().isInt().withMessage('Company ID must be a valid integer'),
-    body('intern_id').optional().isInt().withMessage('Intern ID must be a valid integer'),
-    body('start_date').optional().isISO8601().withMessage('Start date must be a valid date'),
-    body('end_date').optional().isISO8601().withMessage('End date must be a valid date'),
-    body('status').optional().isIn(['Active', 'Completed', 'Cancelled', 'On Hold']).withMessage('Invalid status')
+    body('status').optional().isIn(['Pending', 'Under Review', 'Shortlisted', 'Rejected', 'Selected']).withMessage('Invalid status')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -283,135 +231,35 @@ router.put('/:id', [
         }
 
         const { id } = req.params;
-        const { 
-            title, 
-            description, 
-            company_id, 
-            intern_id, 
-            start_date, 
-            end_date, 
-            duration_weeks, 
-            stipend, 
-            status,
-            supervisor_name,
-            supervisor_email,
-            supervisor_phone,
-            requirements,
-            learning_objectives
-        } = req.body;
+        const { status, cover_letter, resume_url, additional_documents } = req.body;
 
-        // Check if internship exists
-        const existingInternship = await executeQuery('SELECT * FROM internships WHERE id = ?', [id]);
-        if (!existingInternship.success || existingInternship.data.length === 0) {
+        // Check if application exists
+        const existingApp = await executeQuery('SELECT * FROM application WHERE app_id = ?', [id]);
+        if (!existingApp.success || existingApp.data.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Internship not found'
+                message: 'Application not found'
             });
         }
-
-        const currentInternship = existingInternship.data[0];
-
-        // Validate dates if provided
-        if (start_date && end_date) {
-            const startDate = new Date(start_date);
-            const endDate = new Date(end_date);
-            
-            if (startDate >= endDate) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'End date must be after start date'
-                });
-            }
-        }
-
-        // Check if company exists (if being changed)
-        if (company_id) {
-            const companyCheck = await executeQuery('SELECT id FROM companies WHERE id = ? AND is_active = TRUE', [company_id]);
-            if (!companyCheck.success || companyCheck.data.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Company not found'
-                });
-            }
-        }
-
-        // Check if intern exists and is available (if being changed)
-        if (intern_id && intern_id !== currentInternship.intern_id) {
-            const internCheck = await executeQuery('SELECT id, status FROM interns WHERE id = ?', [intern_id]);
-            if (!internCheck.success || internCheck.data.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Intern not found'
-                });
-            }
-
-            if (internCheck.data[0].status !== 'Available') {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Intern is not available for assignment'
-                });
-            }
-        }
-
         // Build update query dynamically
         const updateFields = [];
         const updateValues = [];
 
-        if (title !== undefined) {
-            updateFields.push('title = ?');
-            updateValues.push(title);
-        }
-        if (description !== undefined) {
-            updateFields.push('description = ?');
-            updateValues.push(description);
-        }
-        if (company_id !== undefined) {
-            updateFields.push('company_id = ?');
-            updateValues.push(company_id);
-        }
-        if (intern_id !== undefined) {
-            updateFields.push('intern_id = ?');
-            updateValues.push(intern_id);
-        }
-        if (start_date !== undefined) {
-            updateFields.push('start_date = ?');
-            updateValues.push(start_date);
-        }
-        if (end_date !== undefined) {
-            updateFields.push('end_date = ?');
-            updateValues.push(end_date);
-        }
-        if (duration_weeks !== undefined) {
-            updateFields.push('duration_weeks = ?');
-            updateValues.push(duration_weeks);
-        }
-        if (stipend !== undefined) {
-            updateFields.push('stipend = ?');
-            updateValues.push(stipend);
-        }
         if (status !== undefined) {
             updateFields.push('status = ?');
             updateValues.push(status);
         }
-        if (supervisor_name !== undefined) {
-            updateFields.push('supervisor_name = ?');
-            updateValues.push(supervisor_name);
+        if (cover_letter !== undefined) {
+            updateFields.push('cover_letter = ?');
+            updateValues.push(cover_letter);
         }
-        if (supervisor_email !== undefined) {
-            updateFields.push('supervisor_email = ?');
-            updateValues.push(supervisor_email);
+        if (resume_url !== undefined) {
+            updateFields.push('resume_url = ?');
+            updateValues.push(resume_url);
         }
-        if (supervisor_phone !== undefined) {
-            updateFields.push('supervisor_phone = ?');
-            updateValues.push(supervisor_phone);
-        }
-        if (requirements !== undefined) {
-            updateFields.push('requirements = ?');
-            updateValues.push(requirements);
-        }
-        if (learning_objectives !== undefined) {
-            updateFields.push('learning_objectives = ?');
-            updateValues.push(learning_objectives);
+        if (additional_documents !== undefined) {
+            updateFields.push('additional_documents = ?');
+            updateValues.push(additional_documents);
         }
 
         if (updateFields.length === 0) {
@@ -424,33 +272,14 @@ router.put('/:id', [
         updateValues.push(id);
 
         const result = await executeQuery(
-            `UPDATE internships SET ${updateFields.join(', ')} WHERE id = ?`,
+            `UPDATE application SET ${updateFields.join(', ')} WHERE app_id = ?`,
             updateValues
         );
 
         if (result.success) {
-            // Handle intern status changes
-            if (intern_id !== currentInternship.intern_id) {
-                // Release previous intern
-                if (currentInternship.intern_id) {
-                    await executeQuery('UPDATE interns SET status = "Available" WHERE id = ?', [currentInternship.intern_id]);
-                }
-                // Assign new intern
-                if (intern_id) {
-                    await executeQuery('UPDATE interns SET status = "Assigned" WHERE id = ?', [intern_id]);
-                }
-            }
-
-            // Update intern status based on internship status
-            if (status === 'Completed' && currentInternship.intern_id) {
-                await executeQuery('UPDATE interns SET status = "Completed" WHERE id = ?', [currentInternship.intern_id]);
-            } else if (status === 'Cancelled' && currentInternship.intern_id) {
-                await executeQuery('UPDATE interns SET status = "Available" WHERE id = ?', [currentInternship.intern_id]);
-            }
-
             res.json({
                 success: true,
-                message: 'Internship updated successfully'
+                message: 'Application updated successfully'
             });
         } else {
             res.status(500).json({
@@ -469,38 +298,30 @@ router.put('/:id', [
     }
 });
 
-// Delete internship
+// Delete application (internship)
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Check if internship exists
-        const existingInternship = await executeQuery('SELECT intern_id FROM internships WHERE id = ?', [id]);
-        if (!existingInternship.success || existingInternship.data.length === 0) {
+        // Check if application exists
+        const existingApp = await executeQuery('SELECT app_id FROM application WHERE app_id = ?', [id]);
+        if (!existingApp.success || existingApp.data.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Internship not found'
+                message: 'Application not found'
             });
         }
-
-        const internship = existingInternship.data[0];
-
-        // Release intern if assigned
-        if (internship.intern_id) {
-            await executeQuery('UPDATE interns SET status = "Available" WHERE id = ?', [internship.intern_id]);
-        }
-
-        const result = await executeQuery('DELETE FROM internships WHERE id = ?', [id]);
+        const result = await executeQuery('DELETE FROM application WHERE app_id = ?', [id]);
 
         if (result.success) {
             res.json({
                 success: true,
-                message: 'Internship deleted successfully'
+                message: 'Application deleted successfully'
             });
         } else {
             res.status(500).json({
                 success: false,
-                message: 'Failed to delete internship',
+                message: 'Failed to delete application',
                 error: result.error
             });
         }
@@ -514,14 +335,14 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// Get internship statistics
+// Get application statistics
 router.get('/stats/overview', async (req, res) => {
     try {
         const statsResult = await executeQuery(`
             SELECT 
                 status,
                 COUNT(*) as count
-            FROM internships 
+            FROM application 
             GROUP BY status
         `);
 
@@ -565,7 +386,7 @@ router.get('/stats/overview', async (req, res) => {
     }
 });
 
-// Get internships by company
+// Get applications by company
 router.get('/company/:companyId', async (req, res) => {
     try {
         const { companyId } = req.params;
@@ -573,22 +394,24 @@ router.get('/company/:companyId', async (req, res) => {
 
         let sql = `
             SELECT 
-                i.*,
-                intern.name as intern_name,
-                intern.email as intern_email
-            FROM internships i
-            LEFT JOIN interns intern ON i.intern_id = intern.id
-            WHERE i.company_id = ?
+                a.*,
+                CONCAT(s.first_name, ' ', s.last_name) as intern_name,
+                s.email as intern_email,
+                j.title as job_title
+            FROM application a
+            JOIN jobs j ON a.job_id = j.job_id
+            JOIN students s ON a.stud_id = s.stud_id
+            WHERE j.comp_id = ?
         `;
         const params = [companyId];
 
         if (status) {
-            sql += ' AND i.status = ?';
+            sql += ' AND a.status = ?';
             params.push(status);
         }
 
         const offset = (page - 1) * limit;
-        sql += ' ORDER BY i.created_at DESC LIMIT ? OFFSET ?';
+        sql += ' ORDER BY a.created_at DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limit), parseInt(offset));
 
         const result = await executeQuery(sql, params);

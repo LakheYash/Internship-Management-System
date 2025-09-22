@@ -10,16 +10,16 @@ USE Internship_db;
 
 -- 1. Add missing columns to match ER diagram exactly
 ALTER TABLE students 
-ADD COLUMN profile_v VARCHAR(50) DEFAULT 'v1.0' AFTER stud_id,
-ADD COLUMN pin_code VARCHAR(10) AFTER pin;
+ADD COLUMN IF NOT EXISTS profile_v VARCHAR(50) DEFAULT 'v1.0' AFTER stud_id,
+ADD COLUMN IF NOT EXISTS pin_code VARCHAR(10) AFTER pin;
 
 -- 2. Add missing columns to jobs table
 ALTER TABLE jobs 
-ADD COLUMN pin_code VARCHAR(10) AFTER state;
+ADD COLUMN IF NOT EXISTS pin_code VARCHAR(10) AFTER state;
 
 -- 3. Add missing columns to company table  
 ALTER TABLE company 
-ADD COLUMN pin_code VARCHAR(10) AFTER pin;
+ADD COLUMN IF NOT EXISTS pin_code VARCHAR(10) AFTER pin;
 
 -- 4. Create HR Details table (as per ER diagram)
 CREATE TABLE IF NOT EXISTS hr_details (
@@ -243,7 +243,7 @@ FOR EACH ROW
 BEGIN
     IF OLD.status != NEW.status THEN
         INSERT INTO application_status_history (app_id, old_status, new_status, changed_by, change_reason)
-        VALUES (NEW.app_id, OLD.status, NEW.status, NEW.updated_at, 'Status updated');
+        VALUES (NEW.app_id, OLD.status, NEW.status, NULL, 'Status updated');
     END IF;
 END//
 DELIMITER ;

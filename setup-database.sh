@@ -26,7 +26,7 @@ fi
 
 # Import schema
 echo "Importing database schema..."
-mysql -u root -p Internship_db < database/schema.sql
+mysql -u root -p Internship_db < backend/database/schema.sql
 if [ $? -ne 0 ]; then
     echo "Error: Failed to import schema"
     echo "Please check the schema file and MySQL credentials"

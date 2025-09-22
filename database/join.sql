@@ -51,8 +51,7 @@ SELECT
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     sk.skill_name,
     sk.category,
-    ss.proficiency_level,
-    ss.years_experience
+    ss.proficiency_level
 FROM students s
 JOIN student_skills ss ON s.stud_id = ss.stud_id
 JOIN skills sk ON ss.skill_id = sk.skill_id

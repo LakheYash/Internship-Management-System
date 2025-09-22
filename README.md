@@ -47,6 +47,19 @@ A comprehensive web-based internship management portal built with HTML, CSS, Jav
 - **MySQL**: Relational database management system
 - **Database Name**: `Internship_db`
 
+#### API resource ↔ Database table mapping
+To match the ERD and the implemented schema, some API resource names differ from the underlying database table names. Use this mapping when writing queries or debugging:
+
+- `interns` (API) ↔ `students` (DB)
+- `companies` (API) ↔ `company` (DB)
+- `internships` (API) ↔ `jobs` (DB)
+- `users/auth` (API) ↔ `admin` (DB)
+- `applications` (API) ↔ `application` (DB)
+- `interviews` (API) ↔ `interview` (DB)
+- `notifications` (API) ↔ `notifications` (DB)
+- `skills` (API) ↔ `skills` (DB)
+- `student-skills` (API) ↔ `student_skills` (DB)
+
 ## Project Structure
 
 ```
@@ -95,9 +108,13 @@ cd InternshipManagementSystem
    ```sql
    CREATE DATABASE Internship_db;
    ```
-3. **Import the schema**:
+3. **Import the schema** (primary schema file with tables and sample data):
    ```bash
    mysql -u root -p Internship_db < backend/database/schema.sql
+   ```
+   Optionally apply additional enhancements (views, triggers, procedures, extra tables):
+   ```bash
+   mysql -u root -p Internship_db < database/enhanced_schema.sql
    ```
 
 ### Step 3: Backend Setup
@@ -168,7 +185,7 @@ http://localhost:3000/api
 - `PUT /auth/change-password` - Change password
 
 ### Intern Management
-- `GET /interns` - Get all interns (with pagination and filters)
+- `GET /interns` - Get all interns (backed by `students` table)
 - `GET /interns/:id` - Get intern by ID
 - `POST /interns` - Create new intern
 - `PUT /interns/:id` - Update intern
@@ -176,7 +193,7 @@ http://localhost:3000/api
 - `GET /interns/stats/overview` - Get intern statistics
 
 ### Company Management
-- `GET /companies` - Get all companies
+- `GET /companies` - Get all companies (backed by `company` table)
 - `GET /companies/:id` - Get company by ID
 - `POST /companies` - Create new company
 - `PUT /companies/:id` - Update company
@@ -185,7 +202,7 @@ http://localhost:3000/api
 - `GET /companies/dropdown/list` - Get companies for dropdown
 
 ### Internship Management
-- `GET /internships` - Get all internships
+- `GET /internships` - Get all internships (backed by `jobs` table)
 - `GET /internships/:id` - Get internship by ID
 - `POST /internships` - Create new internship
 - `PUT /internships/:id` - Update internship
@@ -232,10 +249,10 @@ The system comes with a default admin user:
 ## Sample Data
 
 The database includes sample data for:
-- 5 partner companies across different industries
-- 5 sample interns with various backgrounds
-- 5 sample internships with different statuses
-- Default admin user account
+- 5 partner companies (`company`) across different industries
+- 5 sample students (`students`) with various backgrounds
+- 5 sample jobs (`jobs`) representing internships
+- Default admin user (`admin`)
 
 ## Features in Detail
 

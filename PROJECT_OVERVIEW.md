@@ -115,15 +115,27 @@ InternshipManagementSystem/
 
 ## 🗄️ Database Schema
 
-### Tables Created:
-1. **users** - User authentication and profiles
-2. **companies** - Partner companies
-3. **interns** - Intern information and status
-4. **internships** - Internship assignments
-5. **evaluations** - Performance evaluations
-6. **tasks** - Task assignments
-7. **notifications** - System notifications
+### Tables Created (actual schema):
+1. **admin** - Administrative users and authentication
+2. **company** - Partner companies
+3. **students** - Student (intern) information and status
+4. **jobs** - Job postings (internships) by companies
+5. **application** - Student applications to jobs
+6. **interview** - Interviews scheduled for applications
+7. **skills** - Skills master list
+8. **student_skills** - Junction table for students and skills
+9. **education**, **projects** - Student academic and project history
+10. **notifications** - System notifications
+11. Additional enhanced tables (optional): `hr_details`, `job_skills`, `application_status_history`, `student_profile`, `company_reviews`, `system_logs`, `email_templates`, `email_queue`, `file_uploads`, `system_settings`
 
+### API resource ↔ Database table mapping
+- `interns` (API) ↔ `students` (DB)
+- `companies` (API) ↔ `company` (DB)
+- `internships` (API) ↔ `jobs` (DB)
+- `users/auth` (API) ↔ `admin` (DB)
+- `applications` (API) ↔ `application` (DB)
+- `interviews` (API) ↔ `interview` (DB)
+- `notifications` (API) ↔ `notifications` (DB)
 ### Sample Data Included:
 - 1 admin user (admin/password)
 - 5 sample companies across different industries
@@ -142,7 +154,7 @@ InternshipManagementSystem/
 2. Run `./start-system.sh` to start both frontend and backend
 
 ### Manual Setup:
-1. **Database**: Import `database/schema.sql` into MySQL
+1. **Database**: Import `backend/database/schema.sql` into MySQL, then optionally `database/enhanced_schema.sql`
 2. **Backend**: `cd backend && npm install && npm start`
 3. **Frontend**: Open `frontend/index.html` in browser or serve with HTTP server
 
