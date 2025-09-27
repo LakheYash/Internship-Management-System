@@ -97,17 +97,26 @@ function showSection(sectionName) {
 // Dashboard Functions
 async function loadDashboardData() {
     try {
-        const [studentsData, companiesData, jobsData, applicationsData] = await Promise.all([
-            fetchData('/students'),
-            fetchData('/companies'),
-            fetchData('/jobs'),
-            fetchData('/applications')
+        const [studentsStats, companiesStats, jobsStats, applicationsStats, studentsData, companiesData, jobsData, applicationsData] = await Promise.all([
+            fetchData('/students/stats/overview'),
+            fetchData('/companies/stats/overview'),
+            fetchData('/jobs/stats/overview'),
+            fetchData('/applications/stats/overview'),
+            fetchData('/students?limit=1000'),
+            fetchData('/companies?limit=1000'),
+            fetchData('/jobs?limit=1000'),
+            fetchData('/applications?limit=1000')
         ]);
 
-        document.getElementById('total-students').textContent = (studentsData || []).length;
-        document.getElementById('total-companies').textContent = (companiesData || []).length;
-        document.getElementById('active-jobs').textContent = (jobsData || []).filter(j => j.status === 'Active').length;
-        document.getElementById('total-applications').textContent = (applicationsData || []).length;
+        const totalStudents = studentsStats?.total ?? (studentsData || []).length ?? 0;
+        const totalCompanies = companiesStats?.total ?? (companiesData || []).length ?? 0;
+        const activeJobs = (jobsStats?.byStatus && jobsStats.byStatus['Active']) ? jobsStats.byStatus['Active'] : ((jobsData || []).filter(j => j.status === 'Active').length);
+        const totalApplications = applicationsStats?.total ?? (applicationsData || []).length ?? 0;
+
+        document.getElementById('total-students').textContent = totalStudents;
+        document.getElementById('total-companies').textContent = totalCompanies;
+        document.getElementById('active-jobs').textContent = activeJobs;
+        document.getElementById('total-applications').textContent = totalApplications;
 
         students = studentsData || [];
         companies = companiesData || [];
@@ -123,7 +132,7 @@ async function loadDashboardData() {
 // Students Management
 async function loadStudents() {
     try {
-        const data = await fetchData('/students');
+        const data = await fetchData('/students?limit=1000');
         students = data;
         displayStudents(data);
     } catch (error) {
@@ -246,7 +255,7 @@ async function deleteStudent(id) {
 // Companies Management
 async function loadCompanies() {
     try {
-        const data = await fetchData('/companies');
+        const data = await fetchData('/companies?limit=1000');
         companies = data;
         displayCompanies(data);
     } catch (error) {
@@ -370,7 +379,7 @@ async function deleteCompany(id) {
 // Jobs Management
 async function loadJobs() {
     try {
-        const data = await fetchData('/jobs');
+        const data = await fetchData('/jobs?limit=1000');
         jobs = data;
         displayJobs(data);
         populateJobCompanyDropdown();
@@ -522,11 +531,11 @@ function loadReports() {
 
 function createStatusChart() {
     const ctx = document.getElementById('statusChart').getContext('2d');
-    const statusCounts = {
-        'Active': internships.filter(i => i.status === 'Active').length,
-        'Completed': internships.filter(i => i.status === 'Completed').length,
-        'Cancelled': internships.filter(i => i.status === 'Cancelled').length
-    };
+    const statusCounts = applications.reduce((acc, app) => {
+        const key = app.status || 'Unknown';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
 
     new Chart(ctx, {
         type: 'doughnut',
@@ -534,7 +543,7 @@ function createStatusChart() {
             labels: Object.keys(statusCounts),
             datasets: [{
                 data: Object.values(statusCounts),
-                backgroundColor: ['#28a745', '#17a2b8', '#dc3545']
+                backgroundColor: ['#28a745', '#17a2b8', '#dc3545', '#ffc107', '#6c757d']
             }]
         },
         options: {
@@ -547,20 +556,24 @@ function createStatusChart() {
 function createTrendsChart() {
     const ctx = document.getElementById('trendsChart').getContext('2d');
     
-    // Group internships by month
+    // Group applications by application month
     const monthlyData = {};
-    internships.forEach(internship => {
-        const month = new Date(internship.start_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+    (applications || []).forEach(app => {
+        if (!app.application_date) return;
+        const month = new Date(app.application_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
         monthlyData[month] = (monthlyData[month] || 0) + 1;
     });
+
+    const labels = Object.keys(monthlyData);
+    labels.sort((a, b) => new Date(a) - new Date(b));
 
     new Chart(ctx, {
         type: 'line',
         data: {
-            labels: Object.keys(monthlyData),
+            labels,
             datasets: [{
-                label: 'Internships Started',
-                data: Object.values(monthlyData),
+                label: 'Applications Submitted',
+                data: labels.map(l => monthlyData[l]),
                 borderColor: '#007bff',
                 backgroundColor: 'rgba(0, 123, 255, 0.1)',
                 tension: 0.4
@@ -721,7 +734,7 @@ function addInternship() {
 // Applications
 async function loadApplications() {
     try {
-        const data = await fetchData('/applications');
+        const data = await fetchData('/applications?limit=1000');
         applications = data;
         displayApplications(data);
     } catch (error) {
@@ -752,7 +765,7 @@ function displayApplications(appsData) {
 // Interviews
 async function loadInterviews() {
     try {
-        const data = await fetchData('/interviews');
+        const data = await fetchData('/interviews?limit=1000');
         interviews = data;
         displayInterviews(data);
     } catch (error) {
@@ -784,7 +797,7 @@ function displayInterviews(intData) {
 // Skills
 async function loadSkills() {
     try {
-        const data = await fetchData('/skills');
+        const data = await fetchData('/skills?limit=1000');
         skills = data;
         displaySkills(data);
     } catch (error) {

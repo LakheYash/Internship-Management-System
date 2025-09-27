@@ -38,9 +38,16 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// CORS configuration
+// CORS configuration (allow common frontend dev ports by default)
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:8000,http://localhost:3000').split(',');
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true); // allow non-browser or same-origin
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true
 }));
 
