@@ -213,9 +213,9 @@ router.post('/', [
 
         const result = await executeQuery(
             `INSERT INTO jobs 
-            (title, description, comp_id, admin_id, required_skills, salary, job_type, city, state, posted_date, deadline, status, requirements) 
+            (title, description, comp_id, admin_id, salary, job_type, city, state, pin, posted_date, deadline, status, requirements) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [title, description, comp_id, admin_id, required_skills, salary, job_type, city, state, posted_date, deadline, status, requirements]
+            [title, description, comp_id, admin_id, salary, job_type, city, state, req.body.pin, posted_date, deadline, status, requirements]
         );
 
         if (result.success) {

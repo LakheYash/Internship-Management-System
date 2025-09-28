@@ -1,822 +1,1203 @@
-// Internship Management System - Frontend JavaScript
+// Internship Management System - Main Application
+class InternshipManagementSystem {
+    constructor() {
+        this.apiBaseUrl = 'http://localhost:3000/api';
+        this.currentSection = 'dashboard';
+        this.currentPage = 1;
+        this.pageSize = 10;
+        this.data = {
+            students: [],
+            companies: [],
+            jobs: [],
+            applications: [],
+            interviews: [],
+            skills: [],
+            analytics: {}
+        };
+        
+        // Enhanced UI State Management
+        this.uiState = {
+            theme: localStorage.getItem('theme') || 'light',
+            sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+            animations: localStorage.getItem('animations') !== 'false',
+            soundEnabled: localStorage.getItem('soundEnabled') === 'true'
+        };
+        
+        // Animation and loading managers
+        this.animationQueue = [];
+        this.isLoading = false;
+        this.toastManager = new ToastManager();
+        this.loadingManager = new LoadingManager();
+        this.animationManager = new AnimationManager();
+        
+        this.init();
+    }
 
-// Global variables
-let students = [];
-let companies = [];
-let jobs = [];
-let applications = [];
-let interviews = [];
-let skills = [];
-let currentSection = 'dashboard';
+    init() {
+        this.setupEventListeners();
+        this.setupNavigation();
+        // Ensure dashboard is shown and data loaded on first load
+        this.showSection('dashboard');
+    }
 
-// API Base URL
-const API_BASE_URL = 'http://localhost:3000/api';
-
-// Initialize the application
-document.addEventListener('DOMContentLoaded', function() {
-    initializeApp();
-});
-
-function initializeApp() {
-    setupEventListeners();
-    loadDashboardData();
-    showSection('dashboard');
-}
-
-// Event Listeners
-function setupEventListeners() {
-    // Sidebar navigation
-    document.querySelectorAll('.list-group-item').forEach(item => {
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-            const section = this.getAttribute('data-section');
-            showSection(section);
+    setupEventListeners() {
+        // Navigation
+        document.querySelectorAll('[data-section]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const section = e.target.closest('[data-section]').dataset.section;
+                this.showSection(section);
+            });
         });
-    });
 
-    // Form submissions
-    document.getElementById('addStudentForm')?.addEventListener('submit', handleAddStudent);
-    document.getElementById('addCompanyForm')?.addEventListener('submit', handleAddCompany);
-    document.getElementById('addJobForm')?.addEventListener('submit', handleAddJob);
-}
+        // Form submissions
+        document.getElementById('saveStudentBtn')?.addEventListener('click', () => this.saveStudent());
+        document.getElementById('saveCompanyBtn')?.addEventListener('click', () => this.saveCompany());
+        document.getElementById('saveJobBtn')?.addEventListener('click', () => this.saveJob());
+        document.getElementById('saveSkillBtn')?.addEventListener('click', () => this.saveSkill());
+        document.getElementById('saveInterviewBtn')?.addEventListener('click', () => this.scheduleInterview());
 
-// Section Management
-function showSection(sectionName) {
-    // Hide all sections
-    document.querySelectorAll('.content-section').forEach(section => {
-        section.style.display = 'none';
-    });
+        // Filters
+        document.getElementById('studentStatusFilter')?.addEventListener('change', () => this.filterStudents());
+        document.getElementById('studentSearch')?.addEventListener('input', () => this.filterStudents());
+        document.getElementById('clearStudentFilters')?.addEventListener('click', () => this.clearStudentFilters());
 
-    // Remove active class from sidebar items
-    document.querySelectorAll('.list-group-item').forEach(item => {
-        item.classList.remove('active');
-    });
-
-    // Show selected section
-    const targetSection = document.getElementById(`${sectionName}-section`);
-    if (targetSection) {
-        targetSection.style.display = 'block';
-        currentSection = sectionName;
+        // Logout
+        document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
     }
 
-    // Add active class to clicked sidebar item
-    const activeItem = document.querySelector(`[data-section="${sectionName}"]`);
-    if (activeItem) {
-        activeItem.classList.add('active');
+    setupNavigation() {
+        // Set active navigation item
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+            });
+        });
     }
 
-    // Load section-specific data
-    switch(sectionName) {
-        case 'dashboard':
-            loadDashboardData();
-            break;
-        case 'students':
-            loadStudents();
-            break;
-        case 'companies':
-            loadCompanies();
-            break;
-        case 'jobs':
-            loadJobs();
-            break;
-        case 'applications':
-            loadApplications();
-            break;
-        case 'interviews':
-            loadInterviews();
-            break;
-        case 'skills':
-            loadSkills();
-            break;
-        case 'reports':
-            loadReports();
-            break;
-    }
-}
+    async showSection(section) {
+        // Hide all sections
+        document.querySelectorAll('.content-section').forEach(sec => {
+            sec.style.display = 'none';
+            sec.classList.remove('active');
+        });
 
-// Dashboard Functions
-async function loadDashboardData() {
-    try {
-        const [studentsStats, companiesStats, jobsStats, applicationsStats, studentsData, companiesData, jobsData, applicationsData] = await Promise.all([
-            fetchData('/students/stats/overview'),
-            fetchData('/companies/stats/overview'),
-            fetchData('/jobs/stats/overview'),
-            fetchData('/applications/stats/overview'),
-            fetchData('/students?limit=1000'),
-            fetchData('/companies?limit=1000'),
-            fetchData('/jobs?limit=1000'),
-            fetchData('/applications?limit=1000')
-        ]);
+        // Show loading spinner
+        this.showLoading();
 
-        const totalStudents = studentsStats?.total ?? (studentsData || []).length ?? 0;
-        const totalCompanies = companiesStats?.total ?? (companiesData || []).length ?? 0;
-        const activeJobs = (jobsStats?.byStatus && jobsStats.byStatus['Active']) ? jobsStats.byStatus['Active'] : ((jobsData || []).filter(j => j.status === 'Active').length);
-        const totalApplications = applicationsStats?.total ?? (applicationsData || []).length ?? 0;
-
-        document.getElementById('total-students').textContent = totalStudents;
-        document.getElementById('total-companies').textContent = totalCompanies;
-        document.getElementById('active-jobs').textContent = activeJobs;
-        document.getElementById('total-applications').textContent = totalApplications;
-
-        students = studentsData || [];
-        companies = companiesData || [];
-        jobs = jobsData || [];
-        applications = applicationsData || [];
-
-    } catch (error) {
-        console.error('Error loading dashboard data:', error);
-        showAlert('Error loading dashboard data', 'danger');
-    }
-}
-
-// Students Management
-async function loadStudents() {
-    try {
-        const data = await fetchData('/students?limit=1000');
-        students = data;
-        displayStudents(data);
-    } catch (error) {
-        console.error('Error loading students:', error);
-        showAlert('Error loading students data', 'danger');
-    }
-}
-
-function displayStudents(studentsData) {
-    const tbody = document.getElementById('studentsTableBody');
-    tbody.innerHTML = '';
-
-    studentsData.forEach(s => {
-        const row = document.createElement('tr');
-        const fullName = [s.first_name, s.last_name].filter(Boolean).join(' ');
-        row.innerHTML = `
-            <td>${s.stud_id}</td>
-            <td>${fullName}</td>
-            <td>${s.email || ''}</td>
-            <td>${s.phone || ''}</td>
-            <td>${s.city || ''}</td>
-            <td>${s.state || ''}</td>
-            <td><span class="badge bg-secondary">${s.status}</span></td>
-            <td class="action-buttons">
-                <button class="btn btn-sm btn-primary" onclick="editStudent(${s.stud_id})">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteStudent(${s.stud_id})">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-
-async function handleAddStudent(e) {
-    e.preventDefault();
-
-    const formData = {
-        first_name: document.getElementById('studentFirstName').value,
-        last_name: document.getElementById('studentLastName').value,
-        email: document.getElementById('studentEmail').value,
-        phone: document.getElementById('studentPhone').value,
-        city: document.getElementById('studentCity').value,
-        state: document.getElementById('studentState').value,
-        age: document.getElementById('studentAge').value ? parseInt(document.getElementById('studentAge').value) : null,
-        status: document.getElementById('studentStatus').value
-    };
-
-    try {
-        await postData('/students', formData);
-        showAlert('Student added successfully!', 'success');
-        bootstrap.Modal.getInstance(document.getElementById('addStudentModal')).hide();
-        document.getElementById('addStudentForm').reset();
-        loadStudents();
-        loadDashboardData();
-    } catch (error) {
-        console.error('Error adding student:', error);
-        showAlert('Error adding student', 'danger');
-    }
-}
-
-async function editStudent(id) {
-    const student = students.find(s => s.stud_id === id);
-    if (!student) return;
-
-    document.getElementById('studentFirstName').value = student.first_name || '';
-    document.getElementById('studentLastName').value = student.last_name || '';
-    document.getElementById('studentEmail').value = student.email || '';
-    document.getElementById('studentPhone').value = student.phone || '';
-    document.getElementById('studentCity').value = student.city || '';
-    document.getElementById('studentState').value = student.state || '';
-    document.getElementById('studentAge').value = student.age || '';
-    document.getElementById('studentStatus').value = student.status || 'Available';
-
-    const modal = new bootstrap.Modal(document.getElementById('addStudentModal'));
-    modal.show();
-
-    const form = document.getElementById('addStudentForm');
-    form.onsubmit = async (e) => {
-        e.preventDefault();
-        const updateData = {
-            first_name: document.getElementById('studentFirstName').value,
-            last_name: document.getElementById('studentLastName').value,
-            email: document.getElementById('studentEmail').value,
-            phone: document.getElementById('studentPhone').value,
-            city: document.getElementById('studentCity').value,
-            state: document.getElementById('studentState').value,
-            age: document.getElementById('studentAge').value ? parseInt(document.getElementById('studentAge').value) : null,
-            status: document.getElementById('studentStatus').value
-        };
         try {
-            await putData(`/students/${id}`, updateData);
-            showAlert('Student updated successfully!', 'success');
-            modal.hide();
-            loadStudents();
-            loadDashboardData();
-        } catch (error) {
-            console.error('Error updating student:', error);
-            showAlert('Error updating student', 'danger');
-        }
-    };
-}
+            // Show the requested section
+            const targetSection = document.getElementById(`${section}-section`);
+            if (targetSection) {
+                targetSection.style.display = 'block';
+                targetSection.classList.add('active');
+                this.currentSection = section;
 
-async function deleteStudent(id) {
-    if (confirm('Are you sure you want to delete this student?')) {
+                // Load section-specific data
+                await this.loadSectionData(section);
+            }
+        } catch (error) {
+            console.error('Error loading section:', error);
+            this.showToast('Error loading section', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async loadSectionData(section) {
+        switch (section) {
+            case 'dashboard':
+                await this.loadDashboard();
+                break;
+            case 'students':
+                await this.loadStudents();
+                break;
+            case 'companies':
+                await this.loadCompanies();
+                break;
+            case 'jobs':
+                await this.loadJobs();
+                break;
+            case 'applications':
+                await this.loadApplications();
+                break;
+            case 'interviews':
+                await this.loadInterviews();
+                break;
+            case 'skills':
+                await this.loadSkills();
+                break;
+            case 'analytics':
+                await this.loadAnalytics();
+                break;
+        }
+    }
+
+    async loadDashboard() {
+        const dashboardElement = document.getElementById('dashboard-section');
+        
         try {
-            await deleteData(`/students/${id}`);
-            showAlert('Student deleted successfully!', 'success');
-            loadStudents();
-            loadDashboardData();
-        } catch (error) {
-            console.error('Error deleting student:', error);
-            showAlert('Error deleting student', 'danger');
-        }
-    }
-}
+            // Show loading state with animation
+            if (this.loadingManager) {
+                this.loadingManager.show(dashboardElement, 'Loading dashboard data...');
+            }
+            
+            // Load dashboard analytics
+            const response = await fetch(`${this.apiBaseUrl}/analytics/dashboard`);
+            const result = await response.json();
 
-// Companies Management
-async function loadCompanies() {
-    try {
-        const data = await fetchData('/companies?limit=1000');
-        companies = data;
-        displayCompanies(data);
-    } catch (error) {
-        console.error('Error loading companies:', error);
-        showAlert('Error loading companies data', 'danger');
-    }
-}
-
-function displayCompanies(companiesData) {
-    const tbody = document.getElementById('companiesTableBody');
-    tbody.innerHTML = '';
-
-    companiesData.forEach(company => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${company.comp_id}</td>
-            <td>${company.name}</td>
-            <td>${company.industry || ''}</td>
-            <td>${company.hr_name || ''}</td>
-            <td>${company.hr_email || ''}</td>
-            <td>${company.contact_no || ''}</td>
-            <td>${[company.city, company.state].filter(Boolean).join(', ')}</td>
-            <td class="action-buttons">
-                <button class="btn btn-sm btn-primary" onclick="editCompany(${company.comp_id})">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteCompany(${company.comp_id})">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-
-async function handleAddCompany(e) {
-    e.preventDefault();
-    
-    const formData = {
-        name: document.getElementById('companyName').value,
-        industry: document.getElementById('companyIndustry').value,
-        hr_name: document.getElementById('companyHrName').value,
-        hr_email: document.getElementById('companyHrEmail').value,
-        contact_no: document.getElementById('companyContactNo').value,
-        city: document.getElementById('companyCity').value,
-        state: document.getElementById('companyState').value,
-        website: document.getElementById('companyWebsite').value
-    };
-
-    try {
-        await postData('/companies', formData);
-        showAlert('Company added successfully!', 'success');
-        bootstrap.Modal.getInstance(document.getElementById('addCompanyModal')).hide();
-        document.getElementById('addCompanyForm').reset();
-        loadCompanies();
-        loadDashboardData();
-    } catch (error) {
-        console.error('Error adding company:', error);
-        showAlert('Error adding company', 'danger');
-    }
-}
-
-async function editCompany(id) {
-    const company = companies.find(c => c.comp_id === id);
-    if (!company) return;
-
-    // Pre-fill form with company data
-    document.getElementById('companyName').value = company.name;
-    document.getElementById('companyIndustry').value = company.industry;
-    document.getElementById('companyHrName').value = company.hr_name || '';
-    document.getElementById('companyHrEmail').value = company.hr_email || '';
-    document.getElementById('companyContactNo').value = company.contact_no || '';
-    document.getElementById('companyCity').value = company.city || '';
-    document.getElementById('companyState').value = company.state || '';
-    document.getElementById('companyWebsite').value = company.website || '';
-
-    // Show modal
-    const modal = new bootstrap.Modal(document.getElementById('addCompanyModal'));
-    modal.show();
-
-    const form = document.getElementById('addCompanyForm');
-    form.onsubmit = async (e) => {
-        e.preventDefault();
-        const updateData = {
-            name: document.getElementById('companyName').value,
-            industry: document.getElementById('companyIndustry').value,
-            hr_name: document.getElementById('companyHrName').value,
-            hr_email: document.getElementById('companyHrEmail').value,
-            contact_no: document.getElementById('companyContactNo').value,
-            city: document.getElementById('companyCity').value,
-            state: document.getElementById('companyState').value,
-            website: document.getElementById('companyWebsite').value
-        };
-        try {
-            await putData(`/companies/${id}`, updateData);
-            showAlert('Company updated successfully!', 'success');
-            modal.hide();
-            loadCompanies();
-            loadDashboardData();
-        } catch (error) {
-            console.error('Error updating company:', error);
-            showAlert('Error updating company', 'danger');
-        }
-    };
-}
-
-async function deleteCompany(id) {
-    if (confirm('Are you sure you want to delete this company?')) {
-        try {
-            await deleteData(`/companies/${id}`);
-            showAlert('Company deleted successfully!', 'success');
-            loadCompanies();
-            loadDashboardData();
-        } catch (error) {
-            console.error('Error deleting company:', error);
-            showAlert('Error deleting company', 'danger');
-        }
-    }
-}
-
-// Jobs Management
-async function loadJobs() {
-    try {
-        const data = await fetchData('/jobs?limit=1000');
-        jobs = data;
-        displayJobs(data);
-        populateJobCompanyDropdown();
-    } catch (error) {
-        console.error('Error loading jobs:', error);
-        showAlert('Error loading jobs data', 'danger');
-    }
-}
-
-function displayJobs(jobsData) {
-    const tbody = document.getElementById('jobsTableBody');
-    tbody.innerHTML = '';
-
-    jobsData.forEach(j => {
-        const company = companies.find(c => c.comp_id === j.comp_id);
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${j.job_id}</td>
-            <td>${j.title}</td>
-            <td>${company ? company.name : (j.company_name || 'N/A')}</td>
-            <td>${j.job_type}</td>
-            <td>${j.salary != null ? j.salary : ''}</td>
-            <td>${[j.city, j.state].filter(Boolean).join(', ')}</td>
-            <td><span class="badge bg-secondary">${j.status}</span></td>
-            <td class="action-buttons">
-                <button class="btn btn-sm btn-primary" onclick="editJob(${j.job_id})">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteJob(${j.job_id})">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-
-function populateJobCompanyDropdown() {
-    const companySelect = document.getElementById('jobCompany');
-    if (!companySelect) return;
-    companySelect.innerHTML = '<option value="">Select Company</option>';
-    companies.forEach(company => {
-        const option = document.createElement('option');
-        option.value = company.comp_id;
-        option.textContent = company.name;
-        companySelect.appendChild(option);
-    });
-}
-
-async function handleAddJob(e) {
-    e.preventDefault();
-
-    const formData = {
-        title: document.getElementById('jobTitle').value,
-        description: document.getElementById('jobDescription').value,
-        comp_id: parseInt(document.getElementById('jobCompany').value),
-        admin_id: 1,
-        required_skills: document.getElementById('jobRequiredSkills').value,
-        salary: document.getElementById('jobSalary').value ? parseFloat(document.getElementById('jobSalary').value) : null,
-        job_type: document.getElementById('jobType').value,
-        city: document.getElementById('jobCity').value,
-        state: document.getElementById('jobState').value,
-        posted_date: document.getElementById('jobPostedDate').value,
-        deadline: document.getElementById('jobDeadline').value || null,
-        status: document.getElementById('jobStatus').value,
-        requirements: ''
-    };
-
-    try {
-        await postData('/jobs', formData);
-        showAlert('Job added successfully!', 'success');
-        bootstrap.Modal.getInstance(document.getElementById('addJobModal')).hide();
-        document.getElementById('addJobForm').reset();
-        loadJobs();
-        loadDashboardData();
-    } catch (error) {
-        console.error('Error adding job:', error);
-        showAlert('Error adding job', 'danger');
-    }
-}
-
-async function editJob(id) {
-    const job = jobs.find(j => j.job_id === id);
-    if (!job) return;
-
-    document.getElementById('jobTitle').value = job.title || '';
-    document.getElementById('jobDescription').value = job.description || '';
-    document.getElementById('jobCompany').value = job.comp_id || '';
-    document.getElementById('jobType').value = job.job_type || 'Internship';
-    document.getElementById('jobSalary').value = job.salary != null ? job.salary : '';
-    document.getElementById('jobCity').value = job.city || '';
-    document.getElementById('jobState').value = job.state || '';
-    document.getElementById('jobPostedDate').value = job.posted_date ? job.posted_date.substring(0, 10) : '';
-    document.getElementById('jobDeadline').value = job.deadline ? job.deadline.substring(0, 10) : '';
-    document.getElementById('jobRequiredSkills').value = job.required_skills || '';
-    document.getElementById('jobStatus').value = job.status || 'Active';
-
-    const modal = new bootstrap.Modal(document.getElementById('addJobModal'));
-    modal.show();
-
-    const form = document.getElementById('addJobForm');
-    form.onsubmit = async (e) => {
-        e.preventDefault();
-        const updateData = {
-            title: document.getElementById('jobTitle').value,
-            description: document.getElementById('jobDescription').value,
-            comp_id: parseInt(document.getElementById('jobCompany').value),
-            required_skills: document.getElementById('jobRequiredSkills').value,
-            salary: document.getElementById('jobSalary').value ? parseFloat(document.getElementById('jobSalary').value) : null,
-            job_type: document.getElementById('jobType').value,
-            city: document.getElementById('jobCity').value,
-            state: document.getElementById('jobState').value,
-            posted_date: document.getElementById('jobPostedDate').value,
-            deadline: document.getElementById('jobDeadline').value || null,
-            status: document.getElementById('jobStatus').value
-        };
-        try {
-            await putData(`/jobs/${id}`, updateData);
-            showAlert('Job updated successfully!', 'success');
-            modal.hide();
-            loadJobs();
-            loadDashboardData();
-        } catch (error) {
-            console.error('Error updating job:', error);
-            showAlert('Error updating job', 'danger');
-        }
-    };
-}
-
-async function deleteJob(id) {
-    if (confirm('Are you sure you want to delete this job?')) {
-        try {
-            await deleteData(`/jobs/${id}`);
-            showAlert('Job deleted successfully!', 'success');
-            loadJobs();
-            loadDashboardData();
-        } catch (error) {
-            console.error('Error deleting job:', error);
-            showAlert('Error deleting job', 'danger');
-        }
-    }
-}
-
-// Reports
-function loadReports() {
-    createStatusChart();
-    createTrendsChart();
-}
-
-function createStatusChart() {
-    const ctx = document.getElementById('statusChart').getContext('2d');
-    const statusCounts = applications.reduce((acc, app) => {
-        const key = app.status || 'Unknown';
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-    }, {});
-
-    new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: Object.keys(statusCounts),
-            datasets: [{
-                data: Object.values(statusCounts),
-                backgroundColor: ['#28a745', '#17a2b8', '#dc3545', '#ffc107', '#6c757d']
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false
-        }
-    });
-}
-
-function createTrendsChart() {
-    const ctx = document.getElementById('trendsChart').getContext('2d');
-    
-    // Group applications by application month
-    const monthlyData = {};
-    (applications || []).forEach(app => {
-        if (!app.application_date) return;
-        const month = new Date(app.application_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
-        monthlyData[month] = (monthlyData[month] || 0) + 1;
-    });
-
-    const labels = Object.keys(monthlyData);
-    labels.sort((a, b) => new Date(a) - new Date(b));
-
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels,
-            datasets: [{
-                label: 'Applications Submitted',
-                data: labels.map(l => monthlyData[l]),
-                borderColor: '#007bff',
-                backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true
+            if (result.success) {
+                this.data.analytics = result.data;
+                this.updateDashboardStats();
+                this.updateDashboardCharts();
+                this.loadRecentActivity();
+                
+                // Hide loading state
+                if (this.loadingManager) {
+                    this.loadingManager.hide(dashboardElement);
                 }
+                
+                // Animate stats cards
+                this.animateDashboardCards();
+                
+                this.showToast('Dashboard loaded successfully', 'success');
+            }
+        } catch (error) {
+            console.error('Error loading dashboard:', error);
+            this.showToast('Error loading dashboard data', 'error');
+            
+            // Hide loading state on error
+            if (this.loadingManager) {
+                this.loadingManager.hide(dashboardElement);
             }
         }
-    });
-}
-
-// Notification function
-function showNotification(message, type = 'info') {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    notification.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.remove();
-        }
-    }, 5000);
-}
-
-// API Helper Functions
-async function fetchData(endpoint) {
-    try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`);
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
-        if (result && typeof result === 'object' && 'data' in result) {
-            return result.data;
-        }
-        return result;
-    } catch (error) {
-        console.error('API request failed:', error);
-        showNotification('Error: ' + error.message, 'error');
-        throw error;
     }
-}
+    
+    animateDashboardCards() {
+        const statsCards = document.querySelectorAll('.stats-card');
+        if (this.animationManager && statsCards.length > 0) {
+            this.animationManager.staggerAnimation(statsCards, 'fadeInUp', 150);
+        }
+    }
 
-async function postData(endpoint, data) {
-    try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
+    updateDashboardStats() {
+        const analytics = this.data.analytics;
+        if (analytics.overview) {
+            document.getElementById('totalStudents').textContent = analytics.overview.total_students || 0;
+            document.getElementById('activeJobs').textContent = analytics.overview.active_jobs || 0;
+            document.getElementById('totalApplications').textContent = analytics.overview.total_applications || 0;
+            document.getElementById('selectedApplications').textContent = analytics.overview.selected_applications || 0;
+        }
+    }
+
+    updateDashboardCharts() {
+        const analytics = this.data.analytics;
+        
+        // Application Trends Chart
+        if (analytics.trends) {
+            this.createApplicationTrendsChart(analytics.trends);
+        }
+
+        // Top Skills Chart
+        if (analytics.topSkills) {
+            this.createTopSkillsChart(analytics.topSkills);
+        }
+    }
+
+    createApplicationTrendsChart(trendsData) {
+        const ctx = document.getElementById('applicationTrendsChart');
+        if (!ctx) return;
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: trendsData.map(t => t.month),
+                datasets: [{
+                    label: 'Applications',
+                    data: trendsData.map(t => t.applications),
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                    tension: 0.4
+                }]
             },
-            body: JSON.stringify(data)
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
         });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
-        return ('data' in result) ? result.data : result;
-    } catch (error) {
-        console.error('API request failed:', error);
-        showNotification('Error: ' + error.message, 'error');
-        throw error;
     }
-}
 
-async function putData(endpoint, data) {
-    try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
+    createTopSkillsChart(skillsData) {
+        const ctx = document.getElementById('topSkillsChart');
+        if (!ctx) return;
+
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: skillsData.slice(0, 5).map(s => s.skill_name),
+                datasets: [{
+                    data: skillsData.slice(0, 5).map(s => s.jobs_requiring_skill),
+                    backgroundColor: [
+                        '#4e73df',
+                        '#1cc88a',
+                        '#36b9cc',
+                        '#f6c23e',
+                        '#e74a3b'
+                    ]
+                }]
             },
-            body: JSON.stringify(data)
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
         });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
-        return ('data' in result) ? result.data : result;
-    } catch (error) {
-        console.error('API request failed:', error);
-        showNotification('Error: ' + error.message, 'error');
-        throw error;
     }
-}
 
-async function deleteData(endpoint) {
-    try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            method: 'DELETE'
+    async loadRecentActivity() {
+        try {
+            // Load recent applications
+            const applicationsResponse = await fetch(`${this.apiBaseUrl}/applications?limit=5`);
+            const applicationsResult = await applicationsResponse.json();
+            
+            if (applicationsResult.success) {
+                this.displayRecentApplications(applicationsResult.data);
+            }
+
+            // Load upcoming interviews
+            const interviewsResponse = await fetch(`${this.apiBaseUrl}/interviews?upcoming=true&limit=5`);
+            const interviewsResult = await interviewsResponse.json();
+            
+            if (interviewsResult.success) {
+                this.displayUpcomingInterviews(interviewsResult.data);
+            }
+        } catch (error) {
+            console.error('Error loading recent activity:', error);
+        }
+    }
+
+    displayRecentApplications(applications) {
+        const container = document.getElementById('recentApplications');
+        if (!container) return;
+
+        container.innerHTML = applications.map(app => `
+            <div class="d-flex align-items-center mb-2">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-user-circle text-primary"></i>
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <div class="text-sm font-weight-bold">${app.student_name || 'Unknown Student'}</div>
+                    <div class="text-xs text-muted">${app.job_title || 'Unknown Job'}</div>
+                </div>
+                <div class="flex-shrink-0">
+                    <span class="badge badge-${app.status?.toLowerCase().replace(' ', '-')}">${app.status}</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    displayUpcomingInterviews(interviews) {
+        const container = document.getElementById('upcomingInterviews');
+        if (!container) return;
+
+        container.innerHTML = interviews.map(interview => `
+            <div class="d-flex align-items-center mb-2">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-calendar text-info"></i>
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <div class="text-sm font-weight-bold">${interview.student_name || 'Unknown Student'}</div>
+                    <div class="text-xs text-muted">${interview.job_title || 'Unknown Job'}</div>
+                    <div class="text-xs text-muted">${new Date(interview.interview_date).toLocaleDateString()}</div>
+                </div>
+                <div class="flex-shrink-0">
+                    <span class="badge badge-${interview.mode?.toLowerCase()}">${interview.mode}</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async loadStudents() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/students?page=${this.currentPage}&limit=${this.pageSize}`);
+            const result = await response.json();
+
+            if (result.success) {
+                this.data.students = result.data;
+                this.displayStudents(result.data);
+                this.updatePagination(result.pagination, 'students');
+            }
+        } catch (error) {
+            console.error('Error loading students:', error);
+            this.showToast('Error loading students', 'error');
+        }
+    }
+
+    displayStudents(students) {
+        const tbody = document.querySelector('#studentsTable tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = students.map(student => `
+            <tr>
+                <td>${student.stud_id}</td>
+                <td>${student.first_name} ${student.last_name}</td>
+                <td>${student.email}</td>
+                <td>${student.phone || '-'}</td>
+                <td><span class="badge badge-${student.status?.toLowerCase()}">${student.status}</span></td>
+                <td>${student.city || '-'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewStudent(${student.stud_id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editStudent(${student.stud_id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="app.deleteStudent(${student.stud_id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async loadCompanies() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/companies`);
+            const result = await response.json();
+
+            if (result.success) {
+                this.data.companies = result.data;
+                this.displayCompanies(result.data);
+            }
+        } catch (error) {
+            console.error('Error loading companies:', error);
+            this.showToast('Error loading companies', 'error');
+        }
+    }
+
+    displayCompanies(companies) {
+        const tbody = document.querySelector('#companiesTable tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = companies.map(company => `
+            <tr>
+                <td>${company.comp_id}</td>
+                <td>${company.name}</td>
+                <td>${company.industry || '-'}</td>
+                <td>${company.city || '-'}, ${company.state || '-'}</td>
+                <td>${company.contact_no || '-'}</td>
+                <td><span class="badge badge-${company.is_active ? 'active' : 'inactive'}">${company.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewCompany(${company.comp_id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editCompany(${company.comp_id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async loadJobs() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/jobs`);
+            const result = await response.json();
+
+            if (result.success) {
+                this.data.jobs = result.data;
+                this.displayJobs(result.data);
+            }
+        } catch (error) {
+            console.error('Error loading jobs:', error);
+            this.showToast('Error loading jobs', 'error');
+        }
+    }
+
+    displayJobs(jobs) {
+        const tbody = document.querySelector('#jobsTable tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = jobs.map(job => `
+            <tr>
+                <td>${job.job_id}</td>
+                <td>${job.title}</td>
+                <td>${job.company_name || 'Unknown Company'}</td>
+                <td>${job.job_type}</td>
+                <td>$${job.salary ? job.salary.toLocaleString() : '-'}</td>
+                <td>${job.city || '-'}, ${job.state || '-'}</td>
+                <td><span class="badge badge-${job.status?.toLowerCase()}">${job.status}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewJob(${job.job_id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editJob(${job.job_id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async loadApplications() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/applications`);
+            const result = await response.json();
+
+            if (result.success) {
+                this.data.applications = result.data;
+                this.displayApplications(result.data);
+            }
+        } catch (error) {
+            console.error('Error loading applications:', error);
+            this.showToast('Error loading applications', 'error');
+        }
+    }
+
+    displayApplications(applications) {
+        const tbody = document.querySelector('#applicationsTable tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = applications.map(app => `
+            <tr>
+                <td>${app.app_id}</td>
+                <td>${app.student_name || 'Unknown Student'}</td>
+                <td>${app.job_title || 'Unknown Job'}</td>
+                <td>${app.company_name || 'Unknown Company'}</td>
+                <td><span class="badge badge-${app.status?.toLowerCase().replace(' ', '-')}">${app.status}</span></td>
+                <td>${new Date(app.application_date).toLocaleDateString()}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewApplication(${app.app_id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="app.updateApplicationStatus(${app.app_id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async loadInterviews() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/interviews`);
+            const result = await response.json();
+
+            if (result.success) {
+                this.data.interviews = result.data;
+                this.displayInterviews(result.data);
+            }
+        } catch (error) {
+            console.error('Error loading interviews:', error);
+            this.showToast('Error loading interviews', 'error');
+        }
+    }
+
+    displayInterviews(interviews) {
+        const tbody = document.querySelector('#interviewsTable tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = interviews.map(interview => `
+            <tr>
+                <td>${interview.interview_id}</td>
+                <td>${interview.student_name || 'Unknown Student'}</td>
+                <td>${interview.job_title || 'Unknown Job'}</td>
+                <td>${interview.company_name || 'Unknown Company'}</td>
+                <td>${new Date(interview.interview_date).toLocaleString()}</td>
+                <td><span class="badge badge-${interview.mode?.toLowerCase()}">${interview.mode}</span></td>
+                <td><span class="badge badge-${interview.status?.toLowerCase()}">${interview.status}</span></td>
+                <td>${interview.interview_score || '-'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewInterview(${interview.interview_id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editInterview(${interview.interview_id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async loadSkills() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/skills`);
+            const result = await response.json();
+
+            if (result.success) {
+                this.data.skills = result.data;
+                this.displaySkills(result.data);
+            }
+        } catch (error) {
+            console.error('Error loading skills:', error);
+            this.showToast('Error loading skills', 'error');
+        }
+    }
+
+    displaySkills(skills) {
+        const tbody = document.querySelector('#skillsTable tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = skills.map(skill => `
+            <tr>
+                <td>${skill.skill_id}</td>
+                <td>${skill.skill_name}</td>
+                <td>${skill.category}</td>
+                <td>${skill.students_count || 0}</td>
+                <td>${skill.jobs_count || 0}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewSkill(${skill.skill_id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editSkill(${skill.skill_id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSkill(${skill.skill_id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async loadAnalytics() {
+        try {
+            // Load various analytics
+            const [studentsResponse, companiesResponse, jobsResponse] = await Promise.all([
+                fetch(`${this.apiBaseUrl}/analytics/students`),
+                fetch(`${this.apiBaseUrl}/analytics/companies`),
+                fetch(`${this.apiBaseUrl}/analytics/jobs`)
+            ]);
+
+            const studentsResult = await studentsResponse.json();
+            const companiesResult = await companiesResponse.json();
+            const jobsResult = await jobsResponse.json();
+
+            if (studentsResult.success) {
+                this.createStudentAnalyticsChart(studentsResult.data);
+            }
+
+            if (companiesResult.success) {
+                this.createCompanyAnalyticsChart(companiesResult.data);
+            }
+        } catch (error) {
+            console.error('Error loading analytics:', error);
+            this.showToast('Error loading analytics', 'error');
+        }
+    }
+
+    createStudentAnalyticsChart(data) {
+        const ctx = document.getElementById('studentAnalyticsChart');
+        if (!ctx) return;
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.map(s => s.student_name),
+                datasets: [{
+                    label: 'Applications',
+                    data: data.map(s => s.total_applications),
+                    backgroundColor: '#4e73df'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
         });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    createCompanyAnalyticsChart(data) {
+        const ctx = document.getElementById('companyAnalyticsChart');
+        if (!ctx) return;
+
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: data.map(c => c.company_name),
+                datasets: [{
+                    data: data.map(c => c.total_applications),
+                    backgroundColor: [
+                        '#4e73df',
+                        '#1cc88a',
+                        '#36b9cc',
+                        '#f6c23e',
+                        '#e74a3b'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+
+    // Form submission methods
+    async saveStudent() {
+        const formData = {
+            first_name: document.getElementById('firstName').value,
+            last_name: document.getElementById('lastName').value,
+            email: document.getElementById('email').value,
+            phone: document.getElementById('phone').value,
+            age: parseInt(document.getElementById('age').value),
+            city: document.getElementById('city').value,
+            state: document.getElementById('state').value
+        };
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/students`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showToast('Student added successfully', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('addStudentModal')).hide();
+                document.getElementById('addStudentForm').reset();
+                this.loadStudents();
+            } else {
+                this.showToast(result.message || 'Error adding student', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving student:', error);
+            this.showToast('Error saving student', 'error');
         }
-        const result = await response.json();
-        return ('data' in result) ? result.data : result;
-    } catch (error) {
-        console.error('API request failed:', error);
-        showNotification('Error: ' + error.message, 'error');
-        throw error;
     }
-}
 
-// Utility Functions
-function formatDate(dateString) {
-    return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
-}
+    async saveCompany() {
+        const formData = {
+            name: document.getElementById('companyName').value,
+            industry: document.getElementById('industry').value,
+            city: document.getElementById('companyCity').value,
+            state: document.getElementById('companyState').value,
+            contact_no: document.getElementById('contactNo').value,
+            website: document.getElementById('website').value
+        };
 
-function showAlert(message, type) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    const container = document.querySelector('.container-fluid');
-    container.insertBefore(alertDiv, container.firstChild);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/companies`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showToast('Company added successfully', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('addCompanyModal')).hide();
+                document.getElementById('addCompanyForm').reset();
+                this.loadCompanies();
+            } else {
+                this.showToast(result.message || 'Error adding company', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving company:', error);
+            this.showToast('Error saving company', 'error');
         }
-    }, 5000);
-}
+    }
 
-// Global functions for onclick handlers
-function addCompany() {
-    document.getElementById('addCompanyForm').dispatchEvent(new Event('submit'));
-}
+    async saveJob() {
+        const formData = {
+            title: document.getElementById('jobTitle').value,
+            comp_id: parseInt(document.getElementById('jobCompany').value),
+            job_type: document.getElementById('jobType').value,
+            salary: parseFloat(document.getElementById('salary').value),
+            city: document.getElementById('jobCity').value,
+            state: document.getElementById('jobState').value,
+            deadline: document.getElementById('deadline').value,
+            description: document.getElementById('jobDescription').value
+        };
 
-function addInternship() {
-    document.getElementById('addInternshipForm').dispatchEvent(new Event('submit'));
-}
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/jobs`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
 
-// Applications
-async function loadApplications() {
-    try {
-        const data = await fetchData('/applications?limit=1000');
-        applications = data;
-        displayApplications(data);
-    } catch (error) {
-        console.error('Error loading applications:', error);
-        showAlert('Error loading applications data', 'danger');
+            const result = await response.json();
+
+            if (result.success) {
+                this.showToast('Job added successfully', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('addJobModal')).hide();
+                document.getElementById('addJobForm').reset();
+                this.loadJobs();
+            } else {
+                this.showToast(result.message || 'Error adding job', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving job:', error);
+            this.showToast('Error saving job', 'error');
+        }
+    }
+
+    async saveSkill() {
+        const formData = {
+            skill_name: document.getElementById('skillName').value,
+            category: document.getElementById('skillCategory').value
+        };
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/skills`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showToast('Skill added successfully', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('addSkillModal')).hide();
+                document.getElementById('addSkillForm').reset();
+                this.loadSkills();
+            } else {
+                this.showToast(result.message || 'Error adding skill', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving skill:', error);
+            this.showToast('Error saving skill', 'error');
+        }
+    }
+
+    async scheduleInterview() {
+        const formData = {
+            app_id: parseInt(document.getElementById('interviewApplication').value),
+            mode: document.getElementById('interviewMode').value,
+            interview_date: document.getElementById('interviewDate').value,
+            interviewer_name: document.getElementById('interviewerName').value,
+            interviewer_email: document.getElementById('interviewerEmail').value
+        };
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/procedures/schedule-interview`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showToast('Interview scheduled successfully', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('scheduleInterviewModal')).hide();
+                document.getElementById('scheduleInterviewForm').reset();
+                this.loadInterviews();
+            } else {
+                this.showToast(result.message || 'Error scheduling interview', 'error');
+            }
+        } catch (error) {
+            console.error('Error scheduling interview:', error);
+            this.showToast('Error scheduling interview', 'error');
+        }
+    }
+
+    // Filter methods
+    async filterStudents() {
+        const status = document.getElementById('studentStatusFilter').value;
+        const search = document.getElementById('studentSearch').value;
+        
+        let url = `${this.apiBaseUrl}/students?page=${this.currentPage}&limit=${this.pageSize}`;
+        if (status) url += `&status=${status}`;
+        if (search) url += `&search=${search}`;
+
+        try {
+            const response = await fetch(url);
+            const result = await response.json();
+
+            if (result.success) {
+                this.data.students = result.data;
+                this.displayStudents(result.data);
+                this.updatePagination(result.pagination, 'students');
+            }
+        } catch (error) {
+            console.error('Error filtering students:', error);
+            this.showToast('Error filtering students', 'error');
+        }
+    }
+
+    clearStudentFilters() {
+        document.getElementById('studentStatusFilter').value = '';
+        document.getElementById('studentSearch').value = '';
+        this.loadStudents();
+    }
+
+    // Utility methods
+    showLoading() {
+        document.getElementById('loadingSpinner').style.display = 'block';
+    }
+
+    hideLoading() {
+        document.getElementById('loadingSpinner').style.display = 'none';
+    }
+
+    showToast(message, type = 'info', duration = 5000) {
+        // Use enhanced ToastManager if available
+        if (this.toastManager) {
+            this.toastManager.show(message, type, duration);
+            return;
+        }
+        
+        // Fallback to basic toast
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+        const toastHeader = toast.querySelector('.toast-header i');
+        
+        if (toast && toastMessage && toastHeader) {
+            toastMessage.textContent = message;
+            
+            // Update icon based on type
+            toastHeader.className = `fas me-2 text-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'primary'}`;
+            toastHeader.classList.add(`fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'}`);
+            
+            // Show toast
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+        } else {
+            // Ultimate fallback
+            alert(message);
+        }
+    }
+
+    updatePagination(pagination, section) {
+        const paginationContainer = document.getElementById(`${section}Pagination`);
+        if (!paginationContainer || !pagination) return;
+
+        const totalPages = pagination.pages;
+        const currentPage = pagination.page;
+        
+        let paginationHTML = '';
+        
+        // Previous button
+        paginationHTML += `
+            <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="app.changePage(${currentPage - 1}, '${section}')">Previous</a>
+            </li>
+        `;
+        
+        // Page numbers
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === currentPage || (i >= currentPage - 2 && i <= currentPage + 2) || i === 1 || i === totalPages) {
+                paginationHTML += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="app.changePage(${i}, '${section}')">${i}</a>
+                    </li>
+                `;
+            } else if (i === currentPage - 3 || i === currentPage + 3) {
+                paginationHTML += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+        }
+        
+        // Next button
+        paginationHTML += `
+            <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="app.changePage(${currentPage + 1}, '${section}')">Next</a>
+            </li>
+        `;
+        
+        paginationContainer.innerHTML = paginationHTML;
+    }
+
+    changePage(page, section) {
+        this.currentPage = page;
+        this.loadSectionData(section);
+    }
+
+    // Placeholder methods for CRUD operations
+    viewStudent(id) {
+        this.showToast(`View student ${id} - Feature coming soon`, 'info');
+    }
+
+    editStudent(id) {
+        this.showToast(`Edit student ${id} - Feature coming soon`, 'info');
+    }
+
+    async deleteStudent(id) {
+        if (confirm('Are you sure you want to delete this student?')) {
+            try {
+                const response = await fetch(`${this.apiBaseUrl}/students/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.showToast('Student deleted successfully', 'success');
+                    this.loadStudents();
+                } else {
+                    this.showToast(result.message || 'Error deleting student', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting student:', error);
+                this.showToast('Error deleting student', 'error');
+            }
+        }
+    }
+
+    viewCompany(id) {
+        this.showToast(`View company ${id} - Feature coming soon`, 'info');
+    }
+
+    editCompany(id) {
+        this.showToast(`Edit company ${id} - Feature coming soon`, 'info');
+    }
+
+    viewJob(id) {
+        this.showToast(`View job ${id} - Feature coming soon`, 'info');
+    }
+
+    editJob(id) {
+        this.showToast(`Edit job ${id} - Feature coming soon`, 'info');
+    }
+
+    viewApplication(id) {
+        this.showToast(`View application ${id} - Feature coming soon`, 'info');
+    }
+
+    updateApplicationStatus(id) {
+        this.showToast(`Update application status ${id} - Feature coming soon`, 'info');
+    }
+
+    viewInterview(id) {
+        this.showToast(`View interview ${id} - Feature coming soon`, 'info');
+    }
+
+    editInterview(id) {
+        this.showToast(`Edit interview ${id} - Feature coming soon`, 'info');
+    }
+
+    viewSkill(id) {
+        this.showToast(`View skill ${id} - Feature coming soon`, 'info');
+    }
+
+    editSkill(id) {
+        this.showToast(`Edit skill ${id} - Feature coming soon`, 'info');
+    }
+
+    async deleteSkill(id) {
+        if (confirm('Are you sure you want to delete this skill?')) {
+            try {
+                const response = await fetch(`${this.apiBaseUrl}/skills/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.showToast('Skill deleted successfully', 'success');
+                    this.loadSkills();
+                } else {
+                    this.showToast(result.message || 'Error deleting skill', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting skill:', error);
+                this.showToast('Error deleting skill', 'error');
+            }
+        }
+    }
+
+    logout() {
+        this.showToast('Logout - Feature coming soon', 'info');
     }
 }
 
-function displayApplications(appsData) {
-    const tbody = document.getElementById('applicationsTableBody');
-    tbody.innerHTML = '';
-    appsData.forEach(a => {
-        const row = document.createElement('tr');
-        const studentName = [a.first_name, a.last_name].filter(Boolean).join(' ');
-        row.innerHTML = `
-            <td>${a.app_id}</td>
-            <td>${studentName}</td>
-            <td>${a.job_title || ''}</td>
-            <td>${a.company_name || ''}</td>
-            <td>${a.application_date ? formatDate(a.application_date) : ''}</td>
-            <td><span class="badge bg-secondary">${a.status}</span></td>
-            <td class="action-buttons"></td>
+// Enhanced Utility Classes
+class ToastManager {
+    constructor() {
+        this.container = this.createContainer();
+    }
+    
+    createContainer() {
+        const container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
         `;
-        tbody.appendChild(row);
-    });
-}
-
-// Interviews
-async function loadInterviews() {
-    try {
-        const data = await fetchData('/interviews?limit=1000');
-        interviews = data;
-        displayInterviews(data);
-    } catch (error) {
-        console.error('Error loading interviews:', error);
-        showAlert('Error loading interviews data', 'danger');
+        document.body.appendChild(container);
+        return container;
+    }
+    
+    show(message, type = 'info', duration = 5000) {
+        const toast = document.createElement('div');
+        toast.className = `toast show animate-fadeInRight`;
+        toast.style.cssText = `
+            margin-bottom: 10px;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        `;
+        
+        const iconMap = {
+            success: 'fas fa-check-circle text-success',
+            error: 'fas fa-exclamation-circle text-danger',
+            warning: 'fas fa-exclamation-triangle text-warning',
+            info: 'fas fa-info-circle text-info'
+        };
+        
+        toast.innerHTML = `
+            <div class="toast-header">
+                <i class="${iconMap[type] || iconMap.info} me-2"></i>
+                <strong class="me-auto">${type.charAt(0).toUpperCase() + type.slice(1)}</strong>
+                <button type="button" class="btn-close" onclick="this.parentElement.parentElement.remove()"></button>
+            </div>
+            <div class="toast-body">${message}</div>
+        `;
+        
+        this.container.appendChild(toast);
+        
+        // Animate in
+        setTimeout(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(0)';
+        }, 100);
+        
+        // Auto remove
+        setTimeout(() => {
+            this.remove(toast);
+        }, duration);
+    }
+    
+    remove(toast) {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 300);
     }
 }
 
-function displayInterviews(intData) {
-    const tbody = document.getElementById('interviewsTableBody');
-    tbody.innerHTML = '';
-    intData.forEach(i => {
-        const studentName = [i.first_name, i.last_name].filter(Boolean).join(' ');
-        row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${i.interview_id}</td>
-            <td>${studentName}</td>
-            <td>${i.job_title || ''}</td>
-            <td>${i.mode}</td>
-            <td>${i.interview_date ? new Date(i.interview_date).toLocaleString() : ''}</td>
-            <td>${i.interview_score != null ? i.interview_score : ''}</td>
-            <td><span class="badge bg-secondary">${i.status}</span></td>
-            <td class="action-buttons"></td>
+class LoadingManager {
+    constructor() {
+        this.activeLoaders = new Set();
+    }
+    
+    show(element, message = 'Loading...') {
+        const loaderId = `loader-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        this.activeLoaders.add(loaderId);
+        
+        const originalContent = element.innerHTML;
+        element.dataset.originalContent = originalContent;
+        element.dataset.loaderId = loaderId;
+        
+        element.innerHTML = `
+            <div class="loading-spinner">
+                <div class="spinner-border animate-pulse" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-2 text-muted">${message}</div>
+            </div>
         `;
-        tbody.appendChild(row);
-    });
-}
-
-// Skills
-async function loadSkills() {
-    try {
-        const data = await fetchData('/skills?limit=1000');
-        skills = data;
-        displaySkills(data);
-    } catch (error) {
-        console.error('Error loading skills:', error);
-        showAlert('Error loading skills data', 'danger');
+        
+        return loaderId;
+    }
+    
+    hide(element) {
+        const loaderId = element.dataset.loaderId;
+        if (loaderId && this.activeLoaders.has(loaderId)) {
+            this.activeLoaders.delete(loaderId);
+            element.innerHTML = element.dataset.originalContent || '';
+            delete element.dataset.originalContent;
+            delete element.dataset.loaderId;
+        }
+    }
+    
+    hideAll() {
+        document.querySelectorAll('[data-loader-id]').forEach(el => {
+            this.hide(el);
+        });
     }
 }
 
-function displaySkills(skillsData) {
-    const tbody = document.getElementById('skillsTableBody');
-    tbody.innerHTML = '';
-    skillsData.forEach(s => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${s.skill_id}</td>
-            <td>${s.skill_name}</td>
-            <td>${s.category || ''}</td>
-            <td class="action-buttons"></td>
-        `;
-        tbody.appendChild(row);
-    });
+class AnimationManager {
+    constructor() {
+        this.observer = new IntersectionObserver(this.handleIntersection.bind(this), {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        });
+        this.observeElements();
+    }
+    
+    observeElements() {
+        document.querySelectorAll('.animate-on-scroll').forEach(el => {
+            this.observer.observe(el);
+        });
+    }
+    
+    handleIntersection(entries) {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('animate-fadeInUp');
+                this.observer.unobserve(entry.target);
+            }
+        });
+    }
+    
+    animateElement(element, animation = 'fadeInUp', delay = 0) {
+        return new Promise(resolve => {
+            setTimeout(() => {
+                element.classList.add(`animate-${animation}`);
+                setTimeout(resolve, 600);
+            }, delay);
+        });
+    }
+    
+    staggerAnimation(elements, animation = 'fadeInUp', staggerDelay = 100) {
+        return Promise.all(
+            Array.from(elements).map((el, index) => 
+                this.animateElement(el, animation, index * staggerDelay)
+            )
+        );
+    }
 }
+
+// Initialize the application when the DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.app = new InternshipManagementSystem();
+});

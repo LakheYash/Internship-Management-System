@@ -23,6 +23,9 @@ const internRoutes = require('./routes/interns');
 const internshipRoutes = require('./routes/internships');
 const evaluationRoutes = require('./routes/evaluations');
 const taskRoutes = require('./routes/tasks');
+const studentProfileRoutes = require('./routes/student-profile');
+const companyReviewsRoutes = require('./routes/company-reviews');
+const storedProceduresRoutes = require('./routes/stored-procedures');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,14 +41,13 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// CORS configuration (allow common frontend dev ports by default)
-const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:8000,http://localhost:3000').split(',');
+// CORS configuration (allow any localhost origin during development)
+const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean);
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin) return callback(null, true); // allow non-browser or same-origin
-        if (allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        }
+        if (!origin) return callback(null, true);
+        if (/^http:\/\/localhost:\d+$/.test(origin)) return callback(null, true);
+        if (allowedOrigins.length && allowedOrigins.includes(origin)) return callback(null, true);
         return callback(new Error('Not allowed by CORS'));
     },
     credentials: true
@@ -87,6 +89,9 @@ app.use('/api/interns', internRoutes);
 app.use('/api/internships', internshipRoutes);
 app.use('/api/evaluations', evaluationRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/student-profile', studentProfileRoutes);
+app.use('/api/company-reviews', companyReviewsRoutes);
+app.use('/api/procedures', storedProceduresRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -109,7 +114,10 @@ app.get('/', (req, res) => {
             interns: '/api/interns',
             internships: '/api/internships',
             evaluations: '/api/evaluations',
-            tasks: '/api/tasks'
+            tasks: '/api/tasks',
+            studentProfile: '/api/student-profile',
+            companyReviews: '/api/company-reviews',
+            procedures: '/api/procedures'
         }
     });
 });
