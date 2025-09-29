@@ -11,8 +11,7 @@ router.post('/register', [
     body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
     body('email').isEmail().withMessage('Please provide a valid email'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-    body('firstName').notEmpty().withMessage('First name is required'),
-    body('lastName').notEmpty().withMessage('Last name is required')
+    body('role').optional().isIn(['super_admin', 'admin', 'manager']).withMessage('Invalid role')
 ], async (req, res) => {
     try {
         // Check validation errors
@@ -25,7 +24,7 @@ router.post('/register', [
             });
         }
 
-        const { username, email, password, firstName, lastName, role = 'user' } = req.body;
+        const { username, email, password, role = 'admin' } = req.body;
 
         // Check if user already exists
         const existingUser = await executeQuery(
@@ -44,7 +43,7 @@ router.post('/register', [
         const saltRounds = 10;
         const passwordHash = await bcrypt.hash(password, saltRounds);
 
-        // Create user
+        // Create user (admin table has: name, email, password_hash, role)
         const result = await executeQuery(
             'INSERT INTO admin (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
             [username, email, passwordHash, role]
