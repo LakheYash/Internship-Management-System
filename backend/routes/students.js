@@ -1,11 +1,17 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { executeQuery } = require('../database/connection');
+const { authenticateToken, authorize, optionalAuth } = require('../middleware/auth');
+const { asyncHandler, NotFoundError, ValidationError, ConflictError } = require('../middleware/errorHandler');
+const { validateRequest, validateStudent, validateQuery } = require('../middleware/validation');
+const { cache, invalidateCacheMiddleware } = require('../middleware/cache');
+const { uploadConfigs, handleUploadError, fileUtils } = require('../middleware/upload');
+const { notificationService } = require('../services/emailService');
 
 const router = express.Router();
 
-// Get all students
-router.get('/', async (req, res) => {
+// Get all students with advanced filtering and caching
+router.get('/', optionalAuth, validateQuery.pagination, validateRequest, cache(300), asyncHandler(async (req, res) => {
     try {
         const { status, search, page = 1, limit = 10 } = req.query;
         let sql = 'SELECT * FROM students WHERE 1=1';

@@ -3,6 +3,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const { executeQuery } = require('../database/connection');
+const { authenticateToken, authorize } = require('../middleware/auth');
+const { asyncHandler, ValidationError, AuthenticationError, ConflictError } = require('../middleware/errorHandler');
+const { validateRequest } = require('../middleware/validation');
+const { notificationService } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -12,7 +16,7 @@ router.post('/register', [
     body('email').isEmail().withMessage('Please provide a valid email'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
     body('role').optional().isIn(['super_admin', 'admin', 'manager']).withMessage('Invalid role')
-], async (req, res) => {
+], validateRequest, asyncHandler(async (req, res) => {
     try {
         // Check validation errors
         const errors = validationResult(req);

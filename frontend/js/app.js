@@ -1,4 +1,4 @@
-// Internship Management System - Main Application
+// Professional Internship Management System - Main Application
 class InternshipManagementSystem {
     constructor() {
         this.apiBaseUrl = 'http://localhost:3000/api';
@@ -17,7 +17,6 @@ class InternshipManagementSystem {
         
         // Enhanced UI State Management
         this.uiState = {
-            theme: localStorage.getItem('theme') || 'light',
             sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
             animations: localStorage.getItem('animations') !== 'false',
             soundEnabled: localStorage.getItem('soundEnabled') === 'true'
@@ -36,8 +35,20 @@ class InternshipManagementSystem {
     init() {
         this.setupEventListeners();
         this.setupNavigation();
+        this.initializeAOS();
         // Ensure dashboard is shown and data loaded on first load
         this.showSection('dashboard');
+    }
+
+    initializeAOS() {
+        if (typeof AOS !== 'undefined') {
+            AOS.init({
+                duration: 800,
+                easing: 'ease-in-out',
+                once: true,
+                offset: 100
+            });
+        }
     }
 
     setupEventListeners() {
@@ -217,9 +228,10 @@ class InternshipManagementSystem {
                 datasets: [{
                     label: 'Applications',
                     data: trendsData.map(t => t.applications),
-                    borderColor: '#4e73df',
-                    backgroundColor: 'rgba(78, 115, 223, 0.1)',
-                    tension: 0.4
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    tension: 0.4,
+                    fill: true
                 }]
             },
             options: {
@@ -232,7 +244,15 @@ class InternshipManagementSystem {
                 },
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
                     }
                 }
             }
@@ -250,12 +270,14 @@ class InternshipManagementSystem {
                 datasets: [{
                     data: skillsData.slice(0, 5).map(s => s.jobs_requiring_skill),
                     backgroundColor: [
-                        '#4e73df',
-                        '#1cc88a',
-                        '#36b9cc',
-                        '#f6c23e',
-                        '#e74a3b'
-                    ]
+                        '#2563eb',
+                        '#10b981',
+                        '#06b6d4',
+                        '#f59e0b',
+                        '#ef4444'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
                 }]
             },
             options: {
@@ -263,7 +285,11 @@ class InternshipManagementSystem {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'bottom'
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true
+                        }
                     }
                 }
             }
@@ -297,13 +323,13 @@ class InternshipManagementSystem {
         if (!container) return;
 
         container.innerHTML = applications.map(app => `
-            <div class="d-flex align-items-center mb-2">
+            <div class="d-flex align-items-center mb-3 p-2 rounded" style="background: rgba(255, 255, 255, 0.5);">
                 <div class="flex-shrink-0">
-                    <i class="fas fa-user-circle text-primary"></i>
+                    <i class="fas fa-user-circle text-primary fs-4"></i>
                 </div>
                 <div class="flex-grow-1 ms-3">
-                    <div class="text-sm font-weight-bold">${app.student_name || 'Unknown Student'}</div>
-                    <div class="text-xs text-muted">${app.job_title || 'Unknown Job'}</div>
+                    <div class="fw-bold">${app.student_name || 'Unknown Student'}</div>
+                    <div class="text-muted small">${app.job_title || 'Unknown Job'}</div>
                 </div>
                 <div class="flex-shrink-0">
                     <span class="badge badge-${app.status?.toLowerCase().replace(' ', '-')}">${app.status}</span>
@@ -317,20 +343,57 @@ class InternshipManagementSystem {
         if (!container) return;
 
         container.innerHTML = interviews.map(interview => `
-            <div class="d-flex align-items-center mb-2">
+            <div class="d-flex align-items-center mb-3 p-2 rounded" style="background: rgba(255, 255, 255, 0.5);">
                 <div class="flex-shrink-0">
-                    <i class="fas fa-calendar text-info"></i>
+                    <i class="fas fa-calendar text-info fs-4"></i>
                 </div>
                 <div class="flex-grow-1 ms-3">
-                    <div class="text-sm font-weight-bold">${interview.student_name || 'Unknown Student'}</div>
-                    <div class="text-xs text-muted">${interview.job_title || 'Unknown Job'}</div>
-                    <div class="text-xs text-muted">${new Date(interview.interview_date).toLocaleDateString()}</div>
+                    <div class="fw-bold">${interview.student_name || 'Unknown Student'}</div>
+                    <div class="text-muted small">${interview.job_title || 'Unknown Job'}</div>
+                    <div class="text-muted small">${new Date(interview.interview_date).toLocaleDateString()}</div>
                 </div>
                 <div class="flex-shrink-0">
                     <span class="badge badge-${interview.mode?.toLowerCase()}">${interview.mode}</span>
                 </div>
             </div>
         `).join('');
+    }
+
+    // Utility methods
+    showLoading() {
+        document.getElementById('loadingSpinner').style.display = 'block';
+    }
+
+    hideLoading() {
+        document.getElementById('loadingSpinner').style.display = 'none';
+    }
+
+    showToast(message, type = 'info', duration = 5000) {
+        // Use enhanced ToastManager if available
+        if (this.toastManager) {
+            this.toastManager.show(message, type, duration);
+            return;
+        }
+        
+        // Fallback to basic toast
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+        const toastHeader = toast.querySelector('.toast-header i');
+        
+        if (toast && toastMessage && toastHeader) {
+            toastMessage.textContent = message;
+            
+            // Update icon based on type
+            toastHeader.className = `fas me-2 text-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'primary'}`;
+            toastHeader.classList.add(`fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'}`);
+            
+            // Show toast
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+        } else {
+            // Ultimate fallback
+            alert(message);
+        }
     }
 
     async loadStudents() {
@@ -356,24 +419,58 @@ class InternshipManagementSystem {
         tbody.innerHTML = students.map(student => `
             <tr>
                 <td>${student.stud_id}</td>
-                <td>${student.first_name} ${student.last_name}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-sm bg-primary text-white rounded-circle me-2 d-flex align-items-center justify-content-center">
+                            ${student.first_name.charAt(0)}${student.last_name.charAt(0)}
+                        </div>
+                        <div>
+                            <div class="fw-bold">${student.first_name} ${student.last_name}</div>
+                            <small class="text-muted">${student.email}</small>
+                        </div>
+                    </div>
+                </td>
                 <td>${student.email}</td>
                 <td>${student.phone || '-'}</td>
                 <td><span class="badge badge-${student.status?.toLowerCase()}">${student.status}</span></td>
-                <td>${student.city || '-'}</td>
+                <td>${student.city || '-'}, ${student.state || '-'}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewStudent(${student.stud_id})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editStudent(${student.stud_id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="app.deleteStudent(${student.stud_id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <div class="d-flex flex-wrap gap-1">
+                        ${this.getStudentSkills(student.stud_id).slice(0, 3).map(skill => 
+                            `<span class="badge bg-light">${skill}</span>`
+                        ).join('')}
+                        ${this.getStudentSkills(student.stud_id).length > 3 ? 
+                            `<span class="badge bg-secondary">+${this.getStudentSkills(student.stud_id).length - 3}</span>` : ''
+                        }
+                    </div>
+                </td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="app.viewStudent(${student.stud_id})" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.editStudent(${student.stud_id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="app.deleteStudent(${student.stud_id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
+    }
+
+    getStudentSkills(studentId) {
+        // This would typically come from the API, but for now return mock data
+        const skillMap = {
+            1: ['JavaScript', 'React', 'Node.js'],
+            2: ['Python', 'SQL', 'Machine Learning'],
+            3: ['Project Management', 'Data Analysis'],
+            4: ['Java', 'C++', 'System Design'],
+            5: ['Data Analysis', 'Sustainability', 'Research']
+        };
+        return skillMap[studentId] || [];
     }
 
     async loadCompanies() {
@@ -384,6 +481,7 @@ class InternshipManagementSystem {
             if (result.success) {
                 this.data.companies = result.data;
                 this.displayCompanies(result.data);
+                this.populateCompanyDropdown();
             }
         } catch (error) {
             console.error('Error loading companies:', error);
@@ -398,21 +496,50 @@ class InternshipManagementSystem {
         tbody.innerHTML = companies.map(company => `
             <tr>
                 <td>${company.comp_id}</td>
-                <td>${company.name}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-sm bg-success text-white rounded-circle me-2 d-flex align-items-center justify-content-center">
+                            ${company.name.charAt(0)}
+                        </div>
+                        <div>
+                            <div class="fw-bold">${company.name}</div>
+                            <small class="text-muted">${company.industry || 'N/A'}</small>
+                        </div>
+                    </div>
+                </td>
                 <td>${company.industry || '-'}</td>
                 <td>${company.city || '-'}, ${company.state || '-'}</td>
                 <td>${company.contact_no || '-'}</td>
+                <td>
+                    ${company.website ? 
+                        `<a href="${company.website}" target="_blank" class="text-decoration-none">
+                            <i class="fas fa-external-link-alt me-1"></i>Website
+                        </a>` : '-'
+                    }
+                </td>
                 <td><span class="badge badge-${company.is_active ? 'active' : 'inactive'}">${company.is_active ? 'Active' : 'Inactive'}</span></td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewCompany(${company.comp_id})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editCompany(${company.comp_id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="app.viewCompany(${company.comp_id})" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.editCompany(${company.comp_id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
+    }
+
+    populateCompanyDropdown() {
+        const dropdown = document.getElementById('jobCompany');
+        if (!dropdown) return;
+
+        dropdown.innerHTML = '<option value="">Select Company</option>' +
+            this.data.companies.map(company => 
+                `<option value="${company.comp_id}">${company.name}</option>`
+            ).join('');
     }
 
     async loadJobs() {
@@ -437,19 +564,31 @@ class InternshipManagementSystem {
         tbody.innerHTML = jobs.map(job => `
             <tr>
                 <td>${job.job_id}</td>
-                <td>${job.title}</td>
+                <td>
+                    <div class="fw-bold">${job.title}</div>
+                    <small class="text-muted">${job.description ? job.description.substring(0, 50) + '...' : ''}</small>
+                </td>
                 <td>${job.company_name || 'Unknown Company'}</td>
-                <td>${job.job_type}</td>
+                <td><span class="badge bg-info">${job.job_type}</span></td>
                 <td>$${job.salary ? job.salary.toLocaleString() : '-'}</td>
                 <td>${job.city || '-'}, ${job.state || '-'}</td>
+                <td>
+                    ${job.deadline ? 
+                        `<span class="text-${new Date(job.deadline) > new Date() ? 'success' : 'danger'}">
+                            ${new Date(job.deadline).toLocaleDateString()}
+                        </span>` : '-'
+                    }
+                </td>
                 <td><span class="badge badge-${job.status?.toLowerCase()}">${job.status}</span></td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewJob(${job.job_id})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editJob(${job.job_id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="app.viewJob(${job.job_id})" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.editJob(${job.job_id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -463,6 +602,7 @@ class InternshipManagementSystem {
             if (result.success) {
                 this.data.applications = result.data;
                 this.displayApplications(result.data);
+                this.populateApplicationDropdown();
             }
         } catch (error) {
             console.error('Error loading applications:', error);
@@ -477,21 +617,47 @@ class InternshipManagementSystem {
         tbody.innerHTML = applications.map(app => `
             <tr>
                 <td>${app.app_id}</td>
-                <td>${app.student_name || 'Unknown Student'}</td>
-                <td>${app.job_title || 'Unknown Job'}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-sm bg-primary text-white rounded-circle me-2 d-flex align-items-center justify-content-center">
+                            ${app.student_name ? app.student_name.split(' ').map(n => n[0]).join('') : '??'}
+                        </div>
+                        <div>
+                            <div class="fw-bold">${app.student_name || 'Unknown Student'}</div>
+                            <small class="text-muted">${app.student_email || ''}</small>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div class="fw-bold">${app.job_title || 'Unknown Job'}</div>
+                    <small class="text-muted">${app.company_name || 'Unknown Company'}</small>
+                </td>
                 <td>${app.company_name || 'Unknown Company'}</td>
                 <td><span class="badge badge-${app.status?.toLowerCase().replace(' ', '-')}">${app.status}</span></td>
                 <td>${new Date(app.application_date).toLocaleDateString()}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewApplication(${app.app_id})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="app.updateApplicationStatus(${app.app_id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="app.viewApplication(${app.app_id})" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.updateApplicationStatus(${app.app_id})" title="Update Status">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
+    }
+
+    populateApplicationDropdown() {
+        const dropdown = document.getElementById('interviewApplication');
+        if (!dropdown) return;
+
+        dropdown.innerHTML = '<option value="">Select Application</option>' +
+            this.data.applications.filter(app => app.status === 'Shortlisted' || app.status === 'Under Review')
+                .map(app => 
+                    `<option value="${app.app_id}">${app.student_name} - ${app.job_title}</option>`
+                ).join('');
     }
 
     async loadInterviews() {
@@ -516,20 +682,44 @@ class InternshipManagementSystem {
         tbody.innerHTML = interviews.map(interview => `
             <tr>
                 <td>${interview.interview_id}</td>
-                <td>${interview.student_name || 'Unknown Student'}</td>
-                <td>${interview.job_title || 'Unknown Job'}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-sm bg-info text-white rounded-circle me-2 d-flex align-items-center justify-content-center">
+                            ${interview.student_name ? interview.student_name.split(' ').map(n => n[0]).join('') : '??'}
+                        </div>
+                        <div>
+                            <div class="fw-bold">${interview.student_name || 'Unknown Student'}</div>
+                            <small class="text-muted">${interview.student_email || ''}</small>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div class="fw-bold">${interview.job_title || 'Unknown Job'}</div>
+                    <small class="text-muted">${interview.company_name || 'Unknown Company'}</small>
+                </td>
                 <td>${interview.company_name || 'Unknown Company'}</td>
-                <td>${new Date(interview.interview_date).toLocaleString()}</td>
+                <td>
+                    <div class="fw-bold">${new Date(interview.interview_date).toLocaleDateString()}</div>
+                    <small class="text-muted">${new Date(interview.interview_date).toLocaleTimeString()}</small>
+                </td>
                 <td><span class="badge badge-${interview.mode?.toLowerCase()}">${interview.mode}</span></td>
                 <td><span class="badge badge-${interview.status?.toLowerCase()}">${interview.status}</span></td>
-                <td>${interview.interview_score || '-'}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewInterview(${interview.interview_id})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editInterview(${interview.interview_id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
+                    ${interview.interview_score ? 
+                        `<span class="badge ${interview.interview_score >= 80 ? 'bg-success' : interview.interview_score >= 60 ? 'bg-warning' : 'bg-danger'}">
+                            ${interview.interview_score}%
+                        </span>` : '-'
+                    }
+                </td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="app.viewInterview(${interview.interview_id})" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.editInterview(${interview.interview_id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -557,20 +747,29 @@ class InternshipManagementSystem {
         tbody.innerHTML = skills.map(skill => `
             <tr>
                 <td>${skill.skill_id}</td>
-                <td>${skill.skill_name}</td>
-                <td>${skill.category}</td>
-                <td>${skill.students_count || 0}</td>
-                <td>${skill.jobs_count || 0}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="app.viewSkill(${skill.skill_id})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="app.editSkill(${skill.skill_id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSkill(${skill.skill_id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <div class="fw-bold">${skill.skill_name}</div>
+                    <small class="text-muted">${skill.category || 'Uncategorized'}</small>
+                </td>
+                <td><span class="badge bg-secondary">${skill.category || 'Uncategorized'}</span></td>
+                <td>
+                    <span class="badge bg-primary">${skill.students_count || 0} students</span>
+                </td>
+                <td>
+                    <span class="badge bg-info">${skill.jobs_count || 0} jobs</span>
+                </td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="app.viewSkill(${skill.skill_id})" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.editSkill(${skill.skill_id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSkill(${skill.skill_id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -613,7 +812,9 @@ class InternshipManagementSystem {
                 datasets: [{
                     label: 'Applications',
                     data: data.map(s => s.total_applications),
-                    backgroundColor: '#4e73df'
+                    backgroundColor: '#2563eb',
+                    borderColor: '#1d4ed8',
+                    borderWidth: 1
                 }]
             },
             options: {
@@ -622,6 +823,19 @@ class InternshipManagementSystem {
                 plugins: {
                     legend: {
                         display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
                     }
                 }
             }
@@ -639,12 +853,14 @@ class InternshipManagementSystem {
                 datasets: [{
                     data: data.map(c => c.total_applications),
                     backgroundColor: [
-                        '#4e73df',
-                        '#1cc88a',
-                        '#36b9cc',
-                        '#f6c23e',
-                        '#e74a3b'
-                    ]
+                        '#2563eb',
+                        '#10b981',
+                        '#06b6d4',
+                        '#f59e0b',
+                        '#ef4444'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
                 }]
             },
             options: {
@@ -652,7 +868,11 @@ class InternshipManagementSystem {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'bottom'
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true
+                        }
                     }
                 }
             }
@@ -861,43 +1081,6 @@ class InternshipManagementSystem {
         document.getElementById('studentStatusFilter').value = '';
         document.getElementById('studentSearch').value = '';
         this.loadStudents();
-    }
-
-    // Utility methods
-    showLoading() {
-        document.getElementById('loadingSpinner').style.display = 'block';
-    }
-
-    hideLoading() {
-        document.getElementById('loadingSpinner').style.display = 'none';
-    }
-
-    showToast(message, type = 'info', duration = 5000) {
-        // Use enhanced ToastManager if available
-        if (this.toastManager) {
-            this.toastManager.show(message, type, duration);
-            return;
-        }
-        
-        // Fallback to basic toast
-        const toast = document.getElementById('toast');
-        const toastMessage = document.getElementById('toastMessage');
-        const toastHeader = toast.querySelector('.toast-header i');
-        
-        if (toast && toastMessage && toastHeader) {
-            toastMessage.textContent = message;
-            
-            // Update icon based on type
-            toastHeader.className = `fas me-2 text-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'primary'}`;
-            toastHeader.classList.add(`fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'}`);
-            
-            // Show toast
-            const bsToast = new bootstrap.Toast(toast);
-            bsToast.show();
-        } else {
-            // Ultimate fallback
-            alert(message);
-        }
     }
 
     updatePagination(pagination, section) {
@@ -1194,6 +1377,13 @@ class AnimationManager {
                 this.animateElement(el, animation, index * staggerDelay)
             )
         );
+    }
+}
+
+// Global refresh function
+function refreshDashboard() {
+    if (window.app) {
+        window.app.loadDashboard();
     }
 }
 
